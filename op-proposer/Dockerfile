@@ -9,6 +9,7 @@ COPY ./op-proposer /app/op-proposer
 COPY ./op-bindings /app/op-bindings
 COPY ./op-node /app/op-node
 COPY ./op-service /app/op-service
+COPY ./go-ethereum-kms-signer /app/go-ethereum-kms-signer
 COPY ./op-signer /app/op-signer
 COPY ./go.mod /app/go.mod
 COPY ./go.sum /app/go.sum

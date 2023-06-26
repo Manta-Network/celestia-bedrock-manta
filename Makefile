@@ -40,6 +40,10 @@ op-proposer:
 	make -C ./op-proposer op-proposer
 .PHONY: op-proposer
 
+go-ethereum-kms-signer:
+	make -C ./go-ethereum-kms-signer go-ethereum-kms-signer
+.PHONY: go-ethereum-kms-signer
+
 op-program:
 	make -C ./op-program op-program
 .PHONY: op-program

@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"time"
 
+	kmssigner "github.com/ethereum-optimism/optimism/go-ethereum-kms-signer"
 	opservice "github.com/ethereum-optimism/optimism/op-service"
 	opcrypto "github.com/ethereum-optimism/optimism/op-service/crypto"
 	"github.com/ethereum-optimism/optimism/op-signer/client"
@@ -52,6 +53,7 @@ func CLIFlags(envPrefix string) []cli.Flag {
 	prefixEnvVars := func(name string) []string {
 		return opservice.PrefixEnvVar(envPrefix, name)
 	}
+	signerFlags := append(client.CLIFlags(envPrefix), kmssigner.CLIFlags(envPrefix)...)
 	return append([]cli.Flag{
 		&cli.StringFlag{
 			Name:    MnemonicFlagName,
@@ -110,7 +112,7 @@ func CLIFlags(envPrefix string) []cli.Flag {
 			Value:   12 * time.Second,
 			EnvVars: prefixEnvVars("TXMGR_RECEIPT_QUERY_INTERVAL"),
 		},
-	}, client.CLIFlags(envPrefix)...)
+	}, signerFlags...)
 }
 
 type CLIConfig struct {
@@ -121,6 +123,7 @@ type CLIConfig struct {
 	L2OutputHDPath            string
 	PrivateKey                string
 	SignerCLIConfig           client.CLIConfig
+	KMSCLIConfig              kmssigner.CLIConfig
 	NumConfirmations          uint64
 	SafeAbortNonceTooLowCount uint64
 	ResubmissionTimeout       time.Duration
@@ -155,6 +158,9 @@ func (m CLIConfig) Check() error {
 	if err := m.SignerCLIConfig.Check(); err != nil {
 		return err
 	}
+	if err := m.KMSCLIConfig.Check(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -167,6 +173,7 @@ func ReadCLIConfig(ctx *cli.Context) CLIConfig {
 		L2OutputHDPath:            ctx.String(L2OutputHDPathFlag.Name),
 		PrivateKey:                ctx.String(PrivateKeyFlagName),
 		SignerCLIConfig:           client.ReadCLIConfig(ctx),
+		KMSCLIConfig:              kmssigner.ReadCLIConfig(ctx),
 		NumConfirmations:          ctx.Uint64(NumConfirmationsFlagName),
 		SafeAbortNonceTooLowCount: ctx.Uint64(SafeAbortNonceTooLowCountFlagName),
 		ResubmissionTimeout:       ctx.Duration(ResubmissionTimeoutFlagName),
@@ -204,7 +211,25 @@ func NewConfig(cfg CLIConfig, l log.Logger) (Config, error) {
 		hdPath = cfg.L2OutputHDPath
 	}
 
-	signerFactory, from, err := opcrypto.SignerFactoryFromConfig(l, cfg.PrivateKey, cfg.Mnemonic, hdPath, cfg.SignerCLIConfig)
+	// Validate that only one method of signing is provided
+	methodsEnabled := 0
+	if cfg.Mnemonic != "" && hdPath != "" {
+		methodsEnabled += 1
+	}
+	if cfg.PrivateKey != "" {
+		methodsEnabled += 1
+	}
+	if cfg.SignerCLIConfig.Enabled() {
+		methodsEnabled += 1
+	}
+	if cfg.KMSCLIConfig.Enabled() {
+		methodsEnabled += 1
+	}
+	if methodsEnabled != 1 {
+		return Config{}, fmt.Errorf("one method of signing transaction must be provided, %d provided", methodsEnabled)
+	}
+
+	signerFactory, from, err := opcrypto.SignerFactoryFromConfig(l, cfg.PrivateKey, cfg.Mnemonic, hdPath, cfg.SignerCLIConfig, cfg.KMSCLIConfig)
 	if err != nil {
 		return Config{}, fmt.Errorf("could not init signer: %w", err)
 	}

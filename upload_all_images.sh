@@ -1,9 +1,9 @@
 #! /bin/bash
 
-MOD=op-batcher && docker build -t 716662532931.dkr.ecr.us-west-2.amazonaws.com/$MOD:celestia -f $MOD/Dockerfile . && docker image push 716662532931.dkr.ecr.us-west-2.amazonaws.com/$MOD:celestia
+build_tag_push () { docker build -t $1 -f $1/Dockerfile . && docker tag $1 716662532931.dkr.ecr.us-west-2.amazonaws.com/$1:celestia && docker image push 716662532931.dkr.ecr.us-west-2.amazonaws.com/$1:celestia; }
 
-MOD=op-proposer && docker build -t 716662532931.dkr.ecr.us-west-2.amazonaws.com/$MOD:celestia -f $MOD/Dockerfile . && docker image push 716662532931.dkr.ecr.us-west-2.amazonaws.com/$MOD:celestia
+build_tag_push op-batcher
+build_tag_push op-node
+build_tag_push op-proposer
 
-MOD=op-node && docker build -t 716662532931.dkr.ecr.us-west-2.amazonaws.com/$MOD:celestia -f $MOD/Dockerfile . && docker image push 716662532931.dkr.ecr.us-west-2.amazonaws.com/$MOD:celestia
-
-MOD=bedrock-deployer && docker build -t 716662532931.dkr.ecr.us-west-2.amazonaws.com/$MOD:celestia -f ops-bedrock/bedrock-deployer.Dockerfile . && docker image push 716662532931.dkr.ecr.us-west-2.amazonaws.com/$MOD:celestia
+docker build -t 716662532931.dkr.ecr.us-west-2.amazonaws.com/bedrock-deployer:celestia -f ops-bedrock/Dockerfile.bedrock-deployer . && docker image push 716662532931.dkr.ecr.us-west-2.amazonaws.com/bedrock-deployer:celestia

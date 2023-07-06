@@ -7,6 +7,7 @@ RUN apk add --no-cache make gcc musl-dev linux-headers git jq bash
 # build op-proposer with the shared go.mod & go.sum files
 COPY ./op-proposer /app/op-proposer
 COPY ./op-bindings /app/op-bindings
+COPY ./op-geth /app/op-geth
 COPY ./op-node /app/op-node
 COPY ./op-service /app/op-service
 COPY ./go-ethereum-kms-signer /app/go-ethereum-kms-signer

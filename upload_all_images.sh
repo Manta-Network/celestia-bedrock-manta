@@ -16,7 +16,6 @@ build_tag_push () {
   docker image push $ACCOUNT.dkr.ecr.us-west-2.amazonaws.com/$1:$VERSION
 }
 
-pnpm clean # cleanup junk files from the image
 build_tag_push op-batcher .
 build_tag_push op-proposer .
 build_tag_push op-node .

@@ -72,11 +72,9 @@ WORKDIR /opt/optimism
 COPY --from=manifests /tmp/manifests  ./
 COPY *.json ./
 
-RUN pnpm install --frozen-lockfile
-
-COPY ./packages ./packages
-
-RUN pnpm build
-
+RUN pnpm install --frozen-lockfile --filter contracts-bedrock
+COPY ./packages/contracts-bedrock ./packages/contracts-bedrock
 WORKDIR /opt/optimism/packages/contracts-bedrock
+RUN pnpm clean
+RUN pnpm build
 CMD ["npx", "ts-node", "deploy.ts"]

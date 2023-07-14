@@ -1,0 +1,71 @@
+name: ci tests
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  go-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+
+      - name: op-batcher tests
+        run: make -C ./op-batcher test
+
+      - name: op-proposer tests
+        run: make -C ./op-proposer test
+
+      - name: op-node tests
+        run: make -C ./op-node test
+
+      - name: op-e2e tests
+        run: make -C ./op-e2e test
+
+# TODO: fix this later on
+#  ts-test:
+#    runs-on: ubuntu-latest
+#
+#    steps:
+#      - uses: actions/checkout@v3
+#      - name: Setup pnpm
+#        uses: pnpm/action-setup@v2
+#        with:
+#          version: 8.6.7
+#
+#      - name: Install Foundry
+#        uses: foundry-rs/foundry-toolchain@v1
+#        with:
+#          version: nightly
+#
+#      - name: Install Dependencies
+#        run: pnpm install
+#
+#      - name: Build
+#        run: pnpm build
+#
+#      - name: Run unit tests
+#        run: pnpm test
+#        env:
+#          FORCE_COLOR: 1
+#
+#      - name: Lint
+#        run: pnpm lint:check
+#
+#      - name: Install Slither
+#        run: pip3 install slither-analyzer
+#
+#      - name: Run analysis
+#        working-directory: ./packages/contracts-bedrock
+#        shell: bash
+#        run: pnpm slither
+#        continue-on-error: false
+#        env:
+#          PYTEST_ADDOPTS: "--color=yes"

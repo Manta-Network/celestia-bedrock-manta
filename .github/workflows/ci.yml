@@ -17,6 +17,9 @@ jobs:
         with:
           submodules: 'true'
 
+      - name: Fetch history
+        run: git fetch
+
       - name: op-batcher tests
         run: make -C ./op-batcher test
 
@@ -35,6 +38,8 @@ jobs:
 #
 #    steps:
 #      - uses: actions/checkout@v3
+#      - name: Fetch history
+#        run: git fetch
 #      - name: Setup pnpm
 #        uses: pnpm/action-setup@v2
 #        with:

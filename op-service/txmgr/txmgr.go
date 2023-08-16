@@ -1,7 +1,10 @@
 package txmgr
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -10,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/celestiaorg/go-cnc"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -85,6 +89,9 @@ type SimpleTxManager struct {
 	name    string
 	chainID *big.Int
 
+	daClient  *cnc.Client
+	namespace cnc.Namespace
+
 	backend ETHBackend
 	l       log.Logger
 	metr    metrics.TxMetricer
@@ -102,13 +109,30 @@ func NewSimpleTxManager(name string, l log.Logger, m metrics.TxMetricer, cfg CLI
 		return nil, err
 	}
 
+	daClient, err := cnc.NewClient(cfg.DaRpc, cnc.WithTimeout(90*time.Second))
+	if err != nil {
+		return nil, err
+	}
+
+	if cfg.NamespaceId == "" {
+		return nil, errors.New("namespace id cannot be blank")
+	}
+	nsBytes, err := hex.DecodeString(cfg.NamespaceId)
+	if err != nil {
+		return nil, err
+	}
+
+	namespace := cnc.MustNewV0(nsBytes)
+
 	return &SimpleTxManager{
-		chainID: conf.ChainID,
-		name:    name,
-		cfg:     conf,
-		backend: conf.Backend,
-		l:       l.New("service", name),
-		metr:    m,
+		chainID:   conf.ChainID,
+		name:      name,
+		cfg:       conf,
+		daClient:  daClient,
+		namespace: namespace,
+		backend:   conf.Backend,
+		l:         l.New("service", name),
+		metr:      m,
 	}, nil
 }
 
@@ -155,6 +179,49 @@ func (m *SimpleTxManager) send(ctx context.Context, candidate TxCandidate) (*typ
 		ctx, cancel = context.WithTimeout(ctx, m.cfg.TxSendTimeout)
 		defer cancel()
 	}
+	// TODO: this is a hack to route only batcher transactions through celestia
+	// SimpleTxManager is used by both batcher and proposer but since proposer
+	// writes to a smart contract, we overwrite _only_ batcher candidate as the
+	// frame pointer to celestia, while retaining the proposer pathway that
+	// writes the state commitment data to ethereum.
+	if candidate.To.Hex() == "0xfF00000000000000000000000000000000000000" {
+		res, err := m.daClient.SubmitPFB(ctx, m.namespace, candidate.TxData, 200000, 2000000)
+		if err != nil {
+			m.l.Warn("unable to publish tx to celestia", "err", err)
+			return nil, err
+		}
+		fmt.Printf("res: %v\n", res)
+		if res.Code != 0 || res.TxHash == "" || res.Height == 0 {
+			m.l.Warn("unexpected response from celestia got", "res.Code", res.Code, "res.TxHash", res.TxHash, "res.Height", res.Height)
+			return nil, errors.New("unexpected response code")
+		}
+
+		height := res.Height
+
+		// FIXME: needs to be tx index / share index?
+		index := uint32(0) // res.Logs[0].MsgIndex
+
+		// DA pointer serialization format
+		// | -------------------------|
+		// | 8 bytes       | 4 bytes  |
+		// | block height | tx index  |
+		// | -------------------------|
+
+		buf := new(bytes.Buffer)
+		err = binary.Write(buf, binary.BigEndian, height)
+		if err != nil {
+			return nil, fmt.Errorf("data pointer block height serialization failed: %w", err)
+		}
+		err = binary.Write(buf, binary.BigEndian, index)
+		if err != nil {
+			return nil, fmt.Errorf("data pointer tx index serialization failed: %w", err)
+		}
+
+		serialized := buf.Bytes()
+		fmt.Printf("TxData: %v\n", serialized)
+		candidate = TxCandidate{TxData: serialized, To: candidate.To, GasLimit: candidate.GasLimit}
+	}
+
 	tx, err := m.craftTx(ctx, candidate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the tx: %w", err)
@@ -203,6 +270,7 @@ func (m *SimpleTxManager) craftTx(ctx context.Context, candidate TxCandidate) (*
 			GasTipCap: gasTipCap,
 			Data:      rawTx.Data,
 		})
+		m.l.Warn("estimating gas", "candidate", candidate, "gasFeeCap", gasFeeCap, "gasTipCap", gasTipCap, "err", err)
 		if err != nil {
 			return nil, fmt.Errorf("failed to estimate gas: %w", err)
 		}

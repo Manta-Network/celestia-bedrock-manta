@@ -17,6 +17,7 @@ const (
 	L2ClaimBlockNumberLocalIndex
 	L2ChainConfigLocalIndex
 	RollupConfigLocalIndex
+  DaConfigLocalIndex
 )
 
 type BootInfo struct {
@@ -26,6 +27,7 @@ type BootInfo struct {
 	L2ClaimBlockNumber uint64
 	L2ChainConfig      *params.ChainConfig
 	RollupConfig       *rollup.Config
+	DAConfig           *rollup.DAConfig
 }
 
 type oracleClient interface {
@@ -55,6 +57,11 @@ func (br *BootstrapClient) BootInfo() *BootInfo {
 	if err != nil {
 		panic("failed to bootstrap rollup config")
 	}
+  daConfig := new(rollup.DAConfig)
+  err = json.Unmarshal(br.r.Get(DaConfigLocalIndex), daConfig)
+  if err != nil {
+    panic("failed to bootstrap da config")
+  }
 
 	return &BootInfo{
 		L1Head:             l1Head,
@@ -63,5 +70,6 @@ func (br *BootstrapClient) BootInfo() *BootInfo {
 		L2ClaimBlockNumber: l2ClaimBlockNumber,
 		L2ChainConfig:      l2ChainConfig,
 		RollupConfig:       rollupConfig,
+    DAConfig: daConfig,
 	}
 }

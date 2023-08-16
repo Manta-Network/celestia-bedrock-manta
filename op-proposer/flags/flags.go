@@ -37,14 +37,19 @@ var (
 		Usage:   "Address of the L2OutputOracle contract",
 		EnvVars: prefixEnvVars("L2OO_ADDRESS"),
 	}
-
-	// Optional flags
+	DaRpcFlag = &cli.StringFlag{
+		Name:     "da-rpc",
+		Usage:    "HTTP provider URL for DA node",
+		Required: true,
+		EnvVars:  prefixEnvVars("DA_RPC"),
+	}
 	PollIntervalFlag = &cli.DurationFlag{
 		Name:    "poll-interval",
 		Usage:   "How frequently to poll L2 for new blocks",
 		Value:   6 * time.Second,
 		EnvVars: prefixEnvVars("POLL_INTERVAL"),
 	}
+	// Optional flags
 	AllowNonFinalizedFlag = &cli.BoolFlag{
 		Name:    "allow-non-finalized",
 		Usage:   "Allow the proposer to submit proposals for L2 blocks derived from non-finalized L1 blocks.",
@@ -58,6 +63,8 @@ var requiredFlags = []cli.Flag{
 	L1EthRpcFlag,
 	RollupRpcFlag,
 	L2OOAddressFlag,
+	PollIntervalFlag,
+	DaRpcFlag,
 }
 
 var optionalFlags = []cli.Flag{

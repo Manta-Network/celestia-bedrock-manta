@@ -45,6 +45,30 @@ var (
 		Required: true,
 		EnvVars:  prefixEnvVars("DA_RPC"),
 	}
+	NamespaceIdFlag = &cli.StringFlag{
+		Name:    "namespace-id",
+		Usage:   "Namespace ID of the DA layer",
+		Value:   "000008e5f679bf7116cb",
+		EnvVars: prefixEnvVars("NAMESPACE_ID"),
+	}
+	AuthTokenFlag = &cli.StringFlag{
+		Name:     "auth-token",
+		Usage:    "Authentication Token of the DA layer",
+		Required: true,
+		EnvVars:  prefixEnvVars("AUTH_TOKEN"),
+	}
+	S3BucketFlag = &cli.StringFlag{
+		Name:     "s3-bucket",
+		Usage:    "S3 Bucket for DA layer",
+		Required: true,
+		EnvVars:  prefixEnvVars("S3_BUCKET"),
+	}
+	S3RegionFlag = &cli.StringFlag{
+		Name:     "s3-region",
+		Usage:    "S3 Region for DA layer",
+		Required: true,
+		EnvVars:  prefixEnvVars("S3_REGION"),
+	}
 	// Optional flags
 	SubSafetyMarginFlag = &cli.Uint64Flag{
 		Name: "sub-safety-margin",
@@ -92,8 +116,10 @@ var requiredFlags = []cli.Flag{
 	L2EthRpcFlag,
 	RollupRpcFlag,
 	DaRpcFlag,
-	SubSafetyMarginFlag,
-	PollIntervalFlag,
+	NamespaceIdFlag,
+	AuthTokenFlag,
+	S3BucketFlag,
+	S3RegionFlag,
 }
 
 var optionalFlags = []cli.Flag{

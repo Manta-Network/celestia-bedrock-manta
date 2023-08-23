@@ -62,6 +62,8 @@ func NewConfig(ctx *cli.Context, log log.Logger) (*node.Config, error) {
 		ctx.String(flags.DaRPC.Name),
 		ctx.String(flags.AuthToken.Name),
 		ctx.String(flags.NamespaceId.Name),
+		ctx.String(flags.S3Bucket.Name),
+		ctx.String(flags.S3Region.Name),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load da config: %w", err)

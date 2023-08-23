@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -75,7 +78,7 @@ func NewDataSource(ctx context.Context, log log.Logger, cfg *rollup.Config, daCf
 			batcherAddr: batcherAddr,
 		}, nil
 	} else {
-		data, err := DataFromEVMTransactions(cfg, daCfg, batcherAddr, txs, log.New("origin", block))
+		data, err := DataFromEVMTransactions(ctx, cfg, daCfg, batcherAddr, txs, log.New("origin", block))
 		if err != nil {
 			return &DataSource{
 				open:        false,
@@ -100,7 +103,7 @@ func (ds *DataSource) Next(ctx context.Context) (eth.Data, error) {
 	if !ds.open {
 		if _, txs, err := ds.fetcher.InfoAndTxsByHash(ctx, ds.id.Hash); err == nil {
 			ds.open = true
-			ds.data, err = DataFromEVMTransactions(ds.cfg, ds.daCfg, ds.batcherAddr, txs, log.New("origin", ds.id))
+			ds.data, err = DataFromEVMTransactions(ctx, ds.cfg, ds.daCfg, ds.batcherAddr, txs, log.New("origin", ds.id))
 			if err != nil {
 				// already wrapped
 				return nil, err
@@ -120,10 +123,22 @@ func (ds *DataSource) Next(ctx context.Context) (eth.Data, error) {
 	}
 }
 
+func downloadS3Data(ctx context.Context, daCfg *rollup.DAConfig, frameRefData []byte) ([]byte, error) {
+	resp, err := daCfg.S3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(daCfg.S3Bucket),
+		Key:    aws.String(fmt.Sprintf("%x/%x", daCfg.Namespace, frameRefData)),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return ioutil.ReadAll(resp.Body)
+}
+
 // DataFromEVMTransactions filters all of the transactions and returns the calldata from transactions
 // that are sent to the batch inbox address from the batch sender address.
 // This will return an empty array if no valid transactions are found.
-func DataFromEVMTransactions(config *rollup.Config, daCfg *rollup.DAConfig, batcherAddr common.Address, txs types.Transactions, log log.Logger) ([]eth.Data, error) {
+func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *rollup.DAConfig, batcherAddr common.Address, txs types.Transactions, log log.Logger) ([]eth.Data, error) {
 	var out []eth.Data
 	l1Signer := config.L1Signer()
 	for j, tx := range txs {
@@ -138,20 +153,31 @@ func DataFromEVMTransactions(config *rollup.Config, daCfg *rollup.DAConfig, batc
 				log.Warn("tx in inbox with unauthorized submitter", "index", j, "err", err)
 				continue // not an authorized batch submitter, ignore
 			}
+			if len(tx.Data()) == 0 {
+				log.Error("empty tx in inbox", "index", j, "err", err)
+				continue
+			}
 
-			if daCfg != nil {
+			if daCfg != nil && tx.Data()[0] != 0x78 {
 				frameRef := celestia.FrameRef{}
 				frameRef.UnmarshalBinary(tx.Data())
+
 				if err != nil {
-					log.Warn("unable to decode frame reference", "index", j, "err", err)
+					log.Error("unable to decode frame reference", "index", j, "err", err)
 					return nil, err
 				}
-				log.Info("requesting data from celestia", "namespace", hex.EncodeToString(daCfg.Namespace), "height", frameRef.BlockHeight)
-				blob, err := daCfg.Client.Blob.Get(context.Background(), frameRef.BlockHeight, daCfg.Namespace, frameRef.TxCommitment)
+				log.Info("requesting data from aws", "namespace", hex.EncodeToString(daCfg.Namespace), "height", frameRef.BlockHeight)
+				data, err := downloadS3Data(ctx, daCfg, tx.Data())
 				if err != nil {
-					return nil, NewResetError(fmt.Errorf("failed to resolve frame from celestia: %w", err))
+					log.Error("aws request failed", err)
+					log.Info("requesting data from celestia", "namespace", hex.EncodeToString(daCfg.Namespace), "height", frameRef.BlockHeight)
+					blob, err := daCfg.Client.Blob.Get(ctx, frameRef.BlockHeight, daCfg.Namespace, frameRef.TxCommitment)
+					if err != nil {
+						return nil, NewResetError(fmt.Errorf("failed to resolve frame from celestia: %w", err))
+					}
+					data = blob.Data
 				}
-				out = append(out, blob.Data)
+				out = append(out, data)
 			} else {
 				out = append(out, tx.Data())
 			}

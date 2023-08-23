@@ -1,6 +1,7 @@
 package txmgr
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -11,6 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -93,6 +97,8 @@ type SimpleTxManager struct {
 
 	daClient  *openrpc.Client
 	namespace openrpcns.Namespace
+	s3Client  *s3.Client
+	s3Bucket  string
 
 	backend ETHBackend
 	l       log.Logger
@@ -111,9 +117,20 @@ func NewSimpleTxManager(name string, l log.Logger, m metrics.TxMetricer, cfg CLI
 		return nil, err
 	}
 
-	daClient, err := openrpc.NewClient(context.Background(), cfg.DaRpc, cfg.AuthToken)
-	if err != nil {
-		return nil, err
+	var daClient *openrpc.Client
+	var s3Client *s3.Client
+	if len(cfg.DaRpc) > 0 {
+		daClient, err = openrpc.NewClient(context.Background(), cfg.DaRpc, cfg.AuthToken)
+		if err != nil {
+			return nil, err
+		}
+		cfg, err := config.LoadDefaultConfig(context.Background(),
+			config.WithRegion(cfg.S3Region),
+		)
+		if err != nil {
+			return nil, err
+		}
+		s3Client = s3.NewFromConfig(cfg)
 	}
 
 	if cfg.NamespaceId == "" {
@@ -134,6 +151,8 @@ func NewSimpleTxManager(name string, l log.Logger, m metrics.TxMetricer, cfg CLI
 		name:      name,
 		cfg:       conf,
 		daClient:  daClient,
+		s3Client:  s3Client,
+		s3Bucket:  cfg.S3Bucket,
 		namespace: namespace.ToAppNamespace(),
 		backend:   conf.Backend,
 		l:         l.New("service", name),
@@ -177,6 +196,54 @@ func (m *SimpleTxManager) Send(ctx context.Context, candidate TxCandidate) (*typ
 	return receipt, err
 }
 
+func (m *SimpleTxManager) uploadS3Data(ctx context.Context, frameRefData []byte, txData []byte) error {
+	_, err := m.s3Client.PutObject(ctx, &s3.PutObjectInput{
+		Body:   bytes.NewReader(txData),
+		Bucket: &m.s3Bucket,
+		Key:    aws.String(fmt.Sprintf("%x/%x", m.namespace.Bytes(), frameRefData)),
+	})
+	return err
+}
+
+func (m *SimpleTxManager) payForBlob(ctx context.Context, txData []byte) ([]byte, error) {
+	dataBlob, err := blob.NewBlobV0(m.namespace.Bytes(), txData)
+	com, err := blob.CreateCommitment(dataBlob)
+	if err != nil {
+		m.l.Warn("unable to create blob commitment to celestia", "err", err)
+		return nil, err
+	}
+	err = m.daClient.Header.SyncWait(ctx)
+	if err != nil {
+		m.l.Warn("unable to wait for celestia header sync", "err", err)
+		return nil, err
+	}
+	height, err := m.daClient.Blob.Submit(ctx, []*blob.Blob{dataBlob})
+	if err != nil {
+		m.l.Warn("unable to publish tx to celestia", "err", err)
+		return nil, err
+	}
+	fmt.Printf("height: %v\n", height)
+	if height == 0 {
+		m.l.Warn("unexpected response from celestia got", "height", height)
+		return nil, errors.New("unexpected response code")
+	}
+	frameRef := celestia.FrameRef{
+		BlockHeight:  height,
+		TxCommitment: com,
+	}
+	frameRefData, err := frameRef.MarshalBinary()
+	if err != nil {
+		m.l.Warn("frameRef.MarshalBinary() failed")
+		return nil, err
+	}
+	// Backup to aws bucket
+	if err := m.uploadS3Data(ctx, frameRefData, txData); err != nil {
+		m.l.Warn("failed to upload to s3")
+		return nil, err
+	}
+	return frameRefData, nil
+}
+
 // send performs the actual transaction creation and sending.
 func (m *SimpleTxManager) send(ctx context.Context, candidate TxCandidate) (*types.Receipt, error) {
 	if m.cfg.TxSendTimeout != 0 {
@@ -184,39 +251,10 @@ func (m *SimpleTxManager) send(ctx context.Context, candidate TxCandidate) (*typ
 		ctx, cancel = context.WithTimeout(ctx, m.cfg.TxSendTimeout)
 		defer cancel()
 	}
-	// TODO: this is a hack to route only batcher transactions through celestia
-	// SimpleTxManager is used by both batcher and proposer but since proposer
-	// writes to a smart contract, we overwrite _only_ batcher candidate as the
-	// frame pointer to celestia, while retaining the proposer pathway that
-	// writes the state commitment data to ethereum.
-	if candidate.To.Hex() == "0xfF00000000000000000000000000000000000000" {
-		dataBlob, err := blob.NewBlobV0(m.namespace.Bytes(), candidate.TxData)
-		com, err := blob.CreateCommitment(dataBlob)
-		if err != nil {
-			m.l.Warn("unable to create blob commitment to celestia", "err", err)
-			return nil, err
+	if m.daClient != nil {
+		if frameRefData, err := m.payForBlob(ctx, candidate.TxData); err == nil {
+			candidate = TxCandidate{TxData: frameRefData, To: candidate.To, GasLimit: candidate.GasLimit}
 		}
-		err = m.daClient.Header.SyncWait(ctx)
-		if err != nil {
-			m.l.Warn("unable to wait for celestia header sync", "err", err)
-			return nil, err
-		}
-		height, err := m.daClient.Blob.Submit(ctx, []*blob.Blob{dataBlob})
-		if err != nil {
-			m.l.Warn("unable to publish tx to celestia", "err", err)
-			return nil, err
-		}
-		fmt.Printf("height: %v\n", height)
-		if height == 0 {
-			m.l.Warn("unexpected response from celestia got", "height", height)
-			return nil, errors.New("unexpected response code")
-		}
-		frameRef := celestia.FrameRef{
-			BlockHeight: height,
-			TxCommitment: com,
-		}
-		frameRefData, _ := frameRef.MarshalBinary()
-		candidate = TxCandidate{TxData: frameRefData, To: candidate.To, GasLimit: candidate.GasLimit}
 	}
 
 	tx, err := m.craftTx(ctx, candidate)

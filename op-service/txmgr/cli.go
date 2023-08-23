@@ -35,6 +35,8 @@ const (
 	DaRpcFlagName                     = "da-rpc"
 	NamespaceIdFlagName               = "namespace-id"
 	AuthTokenFlagName                 = "auth-token"
+	S3BucketFlagName                  = "s3-bucket"
+	S3RegionFlagName                  = "s3-region"
 )
 
 var (
@@ -115,18 +117,6 @@ func CLIFlags(envPrefix string) []cli.Flag {
 			Value:   12 * time.Second,
 			EnvVars: prefixEnvVars("TXMGR_RECEIPT_QUERY_INTERVAL"),
 		},
-		&cli.StringFlag{
-			Name:   NamespaceIdFlagName,
-			Usage:  "Namespace ID of the DA layer",
-			Value:  "000008e5f679bf7116cb",
-			EnvVars: prefixEnvVars("NAMESPACE_ID"),
-		},
-		&cli.StringFlag{
-			Name:   AuthTokenFlagName,
-			Usage:  "Authentication Token of the DA layer",
-			Value:  "",
-			EnvVars: prefixEnvVars("AUTH_TOKEN"),
-		},
 	}, signerFlags...)
 }
 
@@ -149,6 +139,8 @@ type CLIConfig struct {
 	DaRpc                     string
 	NamespaceId               string
 	AuthToken                 string
+	S3Bucket                  string
+	S3Region                  string
 }
 
 func (m CLIConfig) Check() error {
@@ -202,6 +194,8 @@ func ReadCLIConfig(ctx *cli.Context) CLIConfig {
 		DaRpc:                     ctx.String(DaRpcFlagName),
 		NamespaceId:               ctx.String(NamespaceIdFlagName),
 		AuthToken:                 ctx.String(AuthTokenFlagName),
+		S3Bucket:                  ctx.String(S3BucketFlagName),
+		S3Region:                  ctx.String(S3RegionFlagName),
 	}
 }
 
@@ -307,15 +301,6 @@ type Config struct {
 	// are required to give up on a tx at a particular nonce without receiving
 	// confirmation.
 	SafeAbortNonceTooLowCount uint64
-
-	// DaRpc is the HTTP provider URL for the Data Availability node.
-	DaRpc string
-
-	// NamespaceId is the id of the namespace of the Data Availability node.
-	NamespaceId string
-
-	// AuthToken is the authentication token for the Data Availability node.
-	AuthToken string
 
 	// Signer is used to sign transactions when the gas price is increased.
 	Signer opcrypto.SignerFn

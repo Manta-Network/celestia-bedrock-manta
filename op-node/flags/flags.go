@@ -40,29 +40,41 @@ var (
 		EnvVars: prefixEnvVars("ROLLUP_CONFIG"),
 	}
 	DaRPC = &cli.StringFlag{
-		Name:   "da-rpc",
-		Usage:  "Data Availability RPC",
-		Value:  "http://da:26658",
+		Name:    "da-rpc",
+		Usage:   "Data Availability RPC",
+		Value:   "http://da:26658",
 		EnvVars: prefixEnvVars("DA_RPC"),
 	}
 	NamespaceId = &cli.StringFlag{
-		Name:   "namespace-id",
-		Usage:  "Namespace ID for DA node",
-		Value:  "000008e5f679bf7116cb",
+		Name:    "namespace-id",
+		Usage:   "Namespace ID for DA node",
+		Value:   "000008e5f679bf7116cb",
 		EnvVars: prefixEnvVars("NAMESPACE_ID"),
 	}
 	AuthToken = &cli.StringFlag{
-		Name: "auth-token",
-		Usage: "Authentication Token for DA node",
-		Value: "",
+		Name:    "auth-token",
+		Usage:   "Authentication Token for DA node",
+		Value:   "",
 		EnvVars: prefixEnvVars("AUTH_TOKEN"),
 	}
-	Network = &cli.StringFlag{
-		Name:   "network",
-		Usage:  fmt.Sprintf("Predefined network selection. Available networks: %s", strings.Join(chaincfg.AvailableNetworks(), ", ")),
-		EnvVars: prefixEnvVars("NETWORK"),
+	S3Bucket = &cli.StringFlag{
+		Name:     "s3-bucket",
+		Usage:    "S3 Bucket for DA layer",
+		Required: true,
+		EnvVars:  prefixEnvVars("S3_BUCKET"),
+	}
+	S3Region = &cli.StringFlag{
+		Name:     "s3-region",
+		Usage:    "S3 Region for DA layer",
+		Required: true,
+		EnvVars:  prefixEnvVars("S3_REGION"),
 	}
 	/* Optional Flags */
+	Network = &cli.StringFlag{
+		Name:    "network",
+		Usage:   fmt.Sprintf("Predefined network selection. Available networks: %s", strings.Join(chaincfg.AvailableNetworks(), ", ")),
+		EnvVars: prefixEnvVars("NETWORK"),
+	}
 	RPCListenAddr = &cli.StringFlag{
 		Name:    "rpc.addr",
 		Usage:   "RPC listening address",
@@ -242,6 +254,8 @@ var requiredFlags = []cli.Flag{
 	DaRPC,
 	NamespaceId,
 	AuthToken,
+	S3Bucket,
+	S3Region,
 }
 
 var optionalFlags = []cli.Flag{

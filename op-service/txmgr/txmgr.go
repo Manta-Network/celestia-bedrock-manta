@@ -207,6 +207,10 @@ func (m *SimpleTxManager) uploadS3Data(ctx context.Context, frameRefData []byte,
 
 func (m *SimpleTxManager) payForBlob(ctx context.Context, txData []byte) ([]byte, error) {
 	dataBlob, err := blob.NewBlobV0(m.namespace.Bytes(), txData)
+	if err != nil {
+		m.l.Warn("unable to create celestia blob", "err", err)
+		return nil, err
+	}
 	com, err := blob.CreateCommitment(dataBlob)
 	if err != nil {
 		m.l.Warn("unable to create blob commitment to celestia", "err", err)
@@ -226,6 +230,20 @@ func (m *SimpleTxManager) payForBlob(ctx context.Context, txData []byte) ([]byte
 	if height == 0 {
 		m.l.Warn("unexpected response from celestia got", "height", height)
 		return nil, errors.New("unexpected response code")
+	}
+	proof, err := m.daClient.Blob.GetProof(ctx, height, m.namespace.Bytes(), com)
+	if err != nil {
+		m.l.Warn("unable to get celestia proof")
+		return nil, err
+	}
+	included, err := m.daClient.Blob.Included(ctx, height, m.namespace.Bytes(), proof, com)
+	if err != nil {
+		m.l.Warn("unable to get celestia inclusion status")
+		return nil, err
+	}
+	if included == false {
+		m.l.Error("celestia transaction not included in block")
+		return nil, errors.New("celestia transaction not included in block")
 	}
 	frameRef := celestia.FrameRef{
 		BlockHeight:  height,

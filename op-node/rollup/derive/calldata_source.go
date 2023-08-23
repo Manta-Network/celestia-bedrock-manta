@@ -1,7 +1,9 @@
 package derive
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/rollkit/celestia-openrpc/types/blob"
 
 	"github.com/ethereum-optimism/optimism/op-celestia/celestia"
 	"github.com/ethereum-optimism/optimism/op-node/eth"
@@ -158,26 +161,62 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 				continue
 			}
 
+			// legacy hardfork code
+			if daCfg != nil && len(tx.Data()) == 12 {
+				buf := bytes.NewBuffer(tx.Data())
+				var height int64
+				err := binary.Read(buf, binary.BigEndian, &height)
+				if err != nil && height != 0 {
+					var index uint32
+					err = binary.Read(buf, binary.BigEndian, &index)
+					if err != nil && index == 0 {
+						log.Info("found legacy block - requesting from s3")
+						data, err := downloadS3Data(ctx, daCfg, tx.Data())
+						if err != nil {
+							log.Error("s3 request failed", err)
+						} else {
+							out = append(out, data)
+							continue
+						}
+					}
+				}
+			}
+
 			if daCfg != nil && tx.Data()[0] != 0x78 {
 				frameRef := celestia.FrameRef{}
 				frameRef.UnmarshalBinary(tx.Data())
 
 				if err != nil {
 					log.Error("unable to decode frame reference", "index", j, "err", err)
-					return nil, err
+					return nil, NewResetError(err)
 				}
 				log.Info("requesting data from aws", "namespace", hex.EncodeToString(daCfg.Namespace), "height", frameRef.BlockHeight)
+				var txblob *blob.Blob
 				data, err := downloadS3Data(ctx, daCfg, tx.Data())
 				if err != nil {
 					log.Error("aws request failed", err)
 					log.Info("requesting data from celestia", "namespace", hex.EncodeToString(daCfg.Namespace), "height", frameRef.BlockHeight)
-					blob, err := daCfg.Client.Blob.Get(ctx, frameRef.BlockHeight, daCfg.Namespace, frameRef.TxCommitment)
+					txblob, err = daCfg.Client.Blob.Get(ctx, frameRef.BlockHeight, daCfg.Namespace, frameRef.TxCommitment)
 					if err != nil {
 						return nil, NewResetError(fmt.Errorf("failed to resolve frame from celestia: %w", err))
 					}
-					data = blob.Data
+				} else {
+					txblob, err = blob.NewBlobV0(daCfg.Namespace, data)
+					if err != nil {
+						log.Error("unable to create celestia blob", "err", err)
+						return nil, NewResetError(err)
+					}
 				}
-				out = append(out, data)
+				com, err := blob.CreateCommitment(txblob)
+				if err != nil {
+					log.Error("unable to create celestia commitment", "err", err)
+					return nil, NewResetError(err)
+				}
+				if !bytes.Equal(com, frameRef.TxCommitment) {
+					log.Error("invalid celestia commitment", "err", err)
+					return nil, NewResetError(errors.New("invalid celestia commitment"))
+				}
+				out = append(out, txblob.Data)
 			} else {
 				out = append(out, tx.Data())
 			}

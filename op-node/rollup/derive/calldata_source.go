@@ -161,28 +161,36 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 				continue
 			}
 
-			// legacy hardfork code
-			if daCfg != nil && len(tx.Data()) == 12 {
-				buf := bytes.NewBuffer(tx.Data())
-				var height int64
-				err := binary.Read(buf, binary.BigEndian, &height)
-				if err != nil && height != 0 {
-					var index uint32
-					err = binary.Read(buf, binary.BigEndian, &index)
-					if err != nil && index == 0 {
-						log.Info("found legacy block - requesting from s3")
-						data, err := downloadS3Data(ctx, daCfg, tx.Data())
-						if err != nil {
-							log.Error("s3 request failed", err)
-						} else {
-							out = append(out, data)
-							continue
+			if daCfg != nil && tx.Data()[0] != 0x78 {
+
+				// legacy hardfork code
+				if len(tx.Data()) == 12 {
+					buf := bytes.NewBuffer(tx.Data())
+					var height int64
+					err := binary.Read(buf, binary.BigEndian, &height)
+					if err == nil && height != 0 {
+						var index uint32
+						err = binary.Read(buf, binary.BigEndian, &index)
+						if err == nil && index == 0 {
+							log.Info("found legacy block - requesting from s3")
+							data, err := downloadS3Data(ctx, daCfg, tx.Data())
+							if err != nil {
+								log.Error("s3 request failed - requesting from celestia", err)
+								blobs, err := daCfg.Client.Blob.GetAll(ctx, height, daCfg.Namespace)
+								if err != nil || len(blobs) != 1 {
+									log.Error("celestia request failed")
+								} else {
+									out = append(out, blobs[0].Data)
+									continue
+								}
+							} else {
+								out = append(out, data)
+								continue
+							}
 						}
 					}
 				}
-			}
 
-			if daCfg != nil && tx.Data()[0] != 0x78 {
 				frameRef := celestia.FrameRef{}
 				frameRef.UnmarshalBinary(tx.Data())
 

@@ -15,7 +15,6 @@ COPY ./go-ethereum-kms-signer /app/go-ethereum-kms-signer
 COPY ./op-signer /app/op-signer
 COPY ./go.mod /app/go.mod
 COPY ./go.sum /app/go.sum
-COPY ./.git /app/.git
 
 WORKDIR /app/op-proposer
 

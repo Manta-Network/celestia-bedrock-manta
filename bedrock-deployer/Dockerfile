@@ -38,8 +38,6 @@ FROM ghcr.io/foundry-rs/foundry:v1.0.0 as foundry
 # bigger and alpine is often missing packages for node applications
 # alpine is not officially supported by node.js
 FROM node:16.16.0-bullseye-slim as base
-COPY --from=op-geth /usr/local/bin/geth /usr/local/bin/geth
-COPY --from=op-node /usr/local/bin/op-node /usr/local/bin/op-node
 
 RUN apt-get update && apt-get install -y \
   curl \
@@ -77,4 +75,8 @@ COPY ./packages/contracts-bedrock ./packages/contracts-bedrock
 WORKDIR /opt/optimism/packages/contracts-bedrock
 RUN pnpm clean
 RUN pnpm build
+
+COPY --from=op-geth /usr/local/bin/geth /usr/local/bin/geth
+COPY --from=op-node /usr/local/bin/op-node /usr/local/bin/op-node
+
 CMD ["npx", "ts-node", "deploy.ts"]

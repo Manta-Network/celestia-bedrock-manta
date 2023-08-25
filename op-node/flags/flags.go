@@ -60,13 +60,11 @@ var (
 	S3Bucket = &cli.StringFlag{
 		Name:     "s3-bucket",
 		Usage:    "S3 Bucket for DA layer",
-		Required: true,
 		EnvVars:  prefixEnvVars("S3_BUCKET"),
 	}
 	S3Region = &cli.StringFlag{
 		Name:     "s3-region",
 		Usage:    "S3 Region for DA layer",
-		Required: true,
 		EnvVars:  prefixEnvVars("S3_REGION"),
 	}
 	/* Optional Flags */

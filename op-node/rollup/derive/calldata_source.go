@@ -190,7 +190,7 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 					blobs, err := daCfg.Client.Blob.GetAll(ctx, height, []share.Namespace{daCfg.Namespace})
 					if err != nil {
 						log.Error("celestia-legacy: celestia request failed", err)
-						return nil, NewResetError(err)
+						return nil, NewTemporaryError(err)
 					}
 					data = blobs[0].Data
 				}
@@ -210,7 +210,7 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 
 				if err != nil {
 					log.Error("unable to decode frame reference", "index", j, "err", err)
-					return nil, NewResetError(err)
+					return nil, NewCriticalError(err)
 				}
 				log.Info("requesting data from aws", "namespace", hex.EncodeToString(daCfg.Namespace), "height", frameRef.BlockHeight)
 				var txblob *blob.Blob
@@ -220,23 +220,23 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 					log.Info("requesting data from celestia", "namespace", hex.EncodeToString(daCfg.Namespace), "height", frameRef.BlockHeight)
 					txblob, err = daCfg.Client.Blob.Get(ctx, frameRef.BlockHeight, daCfg.Namespace, frameRef.TxCommitment)
 					if err != nil {
-						return nil, NewResetError(fmt.Errorf("failed to resolve frame from celestia: %w", err))
+						return nil, NewTemporaryError(fmt.Errorf("failed to resolve frame from celestia: %w", err))
 					}
 				} else {
 					txblob, err = blob.NewBlobV0(daCfg.Namespace, data)
 					if err != nil {
 						log.Error("unable to create celestia blob", "err", err)
-						return nil, NewResetError(err)
+						return nil, NewTemporaryError(err)
 					}
 				}
 				com, err := blob.CreateCommitment(txblob)
 				if err != nil {
 					log.Error("unable to create celestia commitment", "err", err)
-					return nil, NewResetError(err)
+					return nil, NewTemporaryError(err)
 				}
 				if !bytes.Equal(com, frameRef.TxCommitment) {
 					log.Error("invalid celestia commitment", "err", err)
-					return nil, NewResetError(errors.New("invalid celestia commitment"))
+					return nil, NewCriticalError(errors.New("invalid celestia commitment"))
 				}
 				out = append(out, txblob.Data)
 

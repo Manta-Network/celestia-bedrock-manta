@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/rollkit/celestia-openrpc/types/blob"
+	"github.com/rollkit/celestia-openrpc/types/share"
 
 	"github.com/ethereum-optimism/optimism/op-celestia/celestia"
 	"github.com/ethereum-optimism/optimism/op-node/eth"
@@ -161,12 +162,17 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 				continue
 			}
 
-			if daCfg != nil && tx.Data()[0] != 0x78 {
+			switch tx.Data()[0] {
+			case 0:
+				if daCfg == nil {
+					log.Error("missing DA_RPC url", err)
+					panic("mising DA_RPC url")
+				}
 
 				// legacy hardfork code
 				if len(tx.Data()) == 12 {
 					buf := bytes.NewBuffer(tx.Data())
-					var height int64
+					var height uint64
 					err := binary.Read(buf, binary.BigEndian, &height)
 					if err == nil && height != 0 {
 						var index uint32
@@ -176,7 +182,7 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 							data, err := downloadS3Data(ctx, daCfg, tx.Data())
 							if err != nil {
 								log.Error("s3 request failed - requesting from celestia", err)
-								blobs, err := daCfg.Client.Blob.GetAll(ctx, height, daCfg.Namespace)
+								blobs, err := daCfg.Client.Blob.GetAll(ctx, height, []share.Namespace{daCfg.Namespace})
 								if err != nil || len(blobs) != 1 {
 									log.Error("celestia request failed")
 								} else {
@@ -225,8 +231,10 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 					return nil, NewResetError(errors.New("invalid celestia commitment"))
 				}
 				out = append(out, txblob.Data)
-			} else {
-				out = append(out, tx.Data())
+			case 1:
+				out = append(out, tx.Data()[1:])
+			default:
+				return nil, NewResetError(fmt.Errorf("invalid data type=%d", tx.Data()[0]))
 			}
 		}
 	}

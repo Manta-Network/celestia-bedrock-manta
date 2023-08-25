@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	openrpc "github.com/rollkit/celestia-openrpc"
 	"github.com/rollkit/celestia-openrpc/types/blob"
-	openrpcns "github.com/rollkit/celestia-openrpc/types/namespace"
 	"github.com/rollkit/celestia-openrpc/types/share"
 
 	"github.com/ethereum-optimism/optimism/op-celestia/celestia"
@@ -95,8 +94,9 @@ type SimpleTxManager struct {
 	name    string
 	chainID *big.Int
 
+	isBatcher bool
 	daClient  *openrpc.Client
-	namespace openrpcns.Namespace
+	namespace []byte
 	s3Client  *s3.Client
 	s3Bucket  string
 
@@ -111,7 +111,7 @@ type SimpleTxManager struct {
 }
 
 // NewSimpleTxManager initializes a new SimpleTxManager with the passed Config.
-func NewSimpleTxManager(name string, l log.Logger, m metrics.TxMetricer, cfg CLIConfig) (*SimpleTxManager, error) {
+func NewSimpleTxManager(name string, l log.Logger, m metrics.TxMetricer, cfg CLIConfig, isBatcher bool) (*SimpleTxManager, error) {
 	conf, err := NewConfig(cfg, l)
 	if err != nil {
 		return nil, err
@@ -119,41 +119,47 @@ func NewSimpleTxManager(name string, l log.Logger, m metrics.TxMetricer, cfg CLI
 
 	var daClient *openrpc.Client
 	var s3Client *s3.Client
-	if len(cfg.DaRpc) > 0 {
+	var ns []byte
+	if isBatcher && len(cfg.DaRpc) > 0 {
 		daClient, err = openrpc.NewClient(context.Background(), cfg.DaRpc, cfg.AuthToken)
 		if err != nil {
 			return nil, err
 		}
-		cfg, err := config.LoadDefaultConfig(context.Background(),
+
+		awscfg, err := config.LoadDefaultConfig(context.Background(),
 			config.WithRegion(cfg.S3Region),
 		)
 		if err != nil {
 			return nil, err
 		}
-		s3Client = s3.NewFromConfig(cfg)
-	}
 
-	if cfg.NamespaceId == "" {
-		return nil, errors.New("namespace id cannot be blank")
-	}
-	nsBytes, err := hex.DecodeString(cfg.NamespaceId)
-	if err != nil {
-		return nil, err
-	}
+		s3Client = s3.NewFromConfig(awscfg)
+		if cfg.NamespaceId == "" {
+			return nil, errors.New("namespace id cannot be blank")
+		}
 
-	namespace, err := share.NewBlobNamespaceV0(nsBytes)
-	if err != nil {
-		return nil, err
+		nsBytes, err := hex.DecodeString(cfg.NamespaceId)
+		if err != nil {
+			return nil, err
+		}
+
+		namespace, err := share.NewBlobNamespaceV0(nsBytes)
+		if err != nil {
+			return nil, err
+		}
+
+		ns = namespace.ToAppNamespace().Bytes()
 	}
 
 	return &SimpleTxManager{
 		chainID:   conf.ChainID,
 		name:      name,
 		cfg:       conf,
+		isBatcher: isBatcher,
 		daClient:  daClient,
 		s3Client:  s3Client,
 		s3Bucket:  cfg.S3Bucket,
-		namespace: namespace.ToAppNamespace(),
+		namespace: ns,
 		backend:   conf.Backend,
 		l:         l.New("service", name),
 		metr:      m,
@@ -200,13 +206,13 @@ func (m *SimpleTxManager) uploadS3Data(ctx context.Context, frameRefData []byte,
 	_, err := m.s3Client.PutObject(ctx, &s3.PutObjectInput{
 		Body:   bytes.NewReader(txData),
 		Bucket: &m.s3Bucket,
-		Key:    aws.String(fmt.Sprintf("%x/%x", m.namespace.Bytes(), frameRefData)),
+		Key:    aws.String(fmt.Sprintf("%x/%x", m.namespace, frameRefData)),
 	})
 	return err
 }
 
 func (m *SimpleTxManager) payForBlob(ctx context.Context, txData []byte) ([]byte, error) {
-	dataBlob, err := blob.NewBlobV0(m.namespace.Bytes(), txData)
+	dataBlob, err := blob.NewBlobV0(m.namespace, txData)
 	if err != nil {
 		m.l.Warn("unable to create celestia blob", "err", err)
 		return nil, err
@@ -231,12 +237,12 @@ func (m *SimpleTxManager) payForBlob(ctx context.Context, txData []byte) ([]byte
 		m.l.Warn("unexpected response from celestia got", "height", height)
 		return nil, errors.New("unexpected response code")
 	}
-	proof, err := m.daClient.Blob.GetProof(ctx, height, m.namespace.Bytes(), com)
+	proof, err := m.daClient.Blob.GetProof(ctx, height, m.namespace, com)
 	if err != nil {
 		m.l.Warn("unable to get celestia proof")
 		return nil, err
 	}
-	included, err := m.daClient.Blob.Included(ctx, height, m.namespace.Bytes(), proof, com)
+	included, err := m.daClient.Blob.Included(ctx, height, m.namespace, proof, com)
 	if err != nil {
 		m.l.Warn("unable to get celestia inclusion status")
 		return nil, err
@@ -269,9 +275,17 @@ func (m *SimpleTxManager) send(ctx context.Context, candidate TxCandidate) (*typ
 		ctx, cancel = context.WithTimeout(ctx, m.cfg.TxSendTimeout)
 		defer cancel()
 	}
-	if m.daClient != nil {
-		if frameRefData, err := m.payForBlob(ctx, candidate.TxData); err == nil {
-			candidate = TxCandidate{TxData: frameRefData, To: candidate.To, GasLimit: candidate.GasLimit}
+
+	if m.isBatcher {
+		isCelestia := false
+		if m.daClient != nil {
+			if frameRefData, err := m.payForBlob(ctx, candidate.TxData); err == nil {
+				candidate.TxData = frameRefData
+				isCelestia = true
+			}
+		}
+		if !isCelestia {
+			candidate.TxData = append([]byte{1}, candidate.TxData...)
 		}
 	}
 

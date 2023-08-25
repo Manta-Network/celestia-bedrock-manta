@@ -115,14 +115,14 @@ var requiredFlags = []cli.Flag{
 	L1EthRpcFlag,
 	L2EthRpcFlag,
 	RollupRpcFlag,
+}
+
+var optionalFlags = []cli.Flag{
 	DaRpcFlag,
 	NamespaceIdFlag,
 	AuthTokenFlag,
 	S3BucketFlag,
 	S3RegionFlag,
-}
-
-var optionalFlags = []cli.Flag{
 	SubSafetyMarginFlag,
 	PollIntervalFlag,
 	MaxPendingTransactionsFlag,

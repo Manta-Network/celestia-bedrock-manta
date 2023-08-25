@@ -11,6 +11,8 @@ var (
 	ErrInvalidVersion = errors.New("invalid version")
 )
 
+const CurrentVersion = 2
+
 // Framer defines a way to encode/decode a FrameRef.
 type Framer interface {
 	encoding.BinaryMarshaler
@@ -50,8 +52,7 @@ var _ Framer = &FrameRef{}
 func (f *FrameRef) MarshalBinary() ([]byte, error) {
 	ref := make([]byte, 9+len(f.TxCommitment))
 
-	// Use zero for the version to reduce the l1 calldata cost.
-	ref[0] = 0
+	ref[0] = CurrentVersion
 	binary.LittleEndian.PutUint64(ref[1:9], f.BlockHeight)
 	copy(ref[9:], f.TxCommitment)
 
@@ -75,7 +76,7 @@ func (f *FrameRef) UnmarshalBinary(ref []byte) error {
 		return ErrInvalidSize
 	}
 	f.Version = ref[0]
-	if f.Version != 0 {
+	if f.Version != CurrentVersion {
 		return ErrInvalidVersion
 	}
 	f.BlockHeight = binary.LittleEndian.Uint64(ref[1:9])

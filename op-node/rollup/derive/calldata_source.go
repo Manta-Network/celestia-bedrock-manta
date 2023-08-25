@@ -163,38 +163,46 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 			}
 
 			switch tx.Data()[0] {
+
+			// legacy hardfork code - remove case 0 for production
 			case 0:
+				if len(tx.Data()) != 12 {
+					log.Error("celestia-legacy: invalid length", len(tx.Data()))
+					continue
+				}
+				buf := bytes.NewBuffer(tx.Data())
+				var height uint64
+				err := binary.Read(buf, binary.BigEndian, &height)
+				if err != nil || height == 0 {
+					log.Error("celestia-legacy: invalid height", height)
+					continue
+				}
+				var index uint32
+				err = binary.Read(buf, binary.BigEndian, &index)
+				if err != nil || index != 0 {
+					log.Error("celestia-legacy: invalid index", index)
+					continue
+				}
+				log.Info("celestia-legacy: requesting block from s3")
+				data, err := downloadS3Data(ctx, daCfg, tx.Data())
+				if err != nil {
+					log.Error("celestia-legacy: s3 request failed, requesting from celestia", err)
+					blobs, err := daCfg.Client.Blob.GetAll(ctx, height, []share.Namespace{daCfg.Namespace})
+					if err != nil {
+						log.Error("celestia-legacy: celestia request failed", err)
+						return nil, NewResetError(err)
+					}
+					data = blobs[0].Data
+				}
+				out = append(out, data)
+
+			case 1:
+				out = append(out, tx.Data()[1:])
+
+			case celestia.CurrentVersion: // 2
 				if daCfg == nil {
 					log.Error("missing DA_RPC url", err)
 					panic("mising DA_RPC url")
-				}
-
-				// legacy hardfork code
-				if len(tx.Data()) == 12 {
-					buf := bytes.NewBuffer(tx.Data())
-					var height uint64
-					err := binary.Read(buf, binary.BigEndian, &height)
-					if err == nil && height != 0 {
-						var index uint32
-						err = binary.Read(buf, binary.BigEndian, &index)
-						if err == nil && index == 0 {
-							log.Info("found legacy block - requesting from s3")
-							data, err := downloadS3Data(ctx, daCfg, tx.Data())
-							if err != nil {
-								log.Error("s3 request failed - requesting from celestia", err)
-								blobs, err := daCfg.Client.Blob.GetAll(ctx, height, []share.Namespace{daCfg.Namespace})
-								if err != nil || len(blobs) != 1 {
-									log.Error("celestia request failed")
-								} else {
-									out = append(out, blobs[0].Data)
-									continue
-								}
-							} else {
-								out = append(out, data)
-								continue
-							}
-						}
-					}
 				}
 
 				frameRef := celestia.FrameRef{}
@@ -231,10 +239,10 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 					return nil, NewResetError(errors.New("invalid celestia commitment"))
 				}
 				out = append(out, txblob.Data)
-			case 1:
-				out = append(out, tx.Data()[1:])
+
 			default:
-				return nil, NewResetError(fmt.Errorf("invalid data type=%d", tx.Data()[0]))
+				log.Error("invalid data type", tx.Data()[0])
+				continue
 			}
 		}
 	}

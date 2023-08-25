@@ -130,7 +130,7 @@ func (ds *DataSource) Next(ctx context.Context) (eth.Data, error) {
 func downloadS3Data(ctx context.Context, daCfg *rollup.DAConfig, frameRefData []byte) ([]byte, error) {
 	resp, err := daCfg.S3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(daCfg.S3Bucket),
-		Key:    aws.String(fmt.Sprintf("%x/%x", daCfg.Namespace, frameRefData)),
+		Key:    aws.String(fmt.Sprintf("%s/%x", daCfg.Namespace.String(), frameRefData)),
 	})
 	if err != nil {
 		return nil, err
@@ -167,26 +167,26 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 			// legacy hardfork code - remove case 0 for production
 			case 0:
 				if len(tx.Data()) != 12 {
-					log.Error("celestia-legacy: invalid length", len(tx.Data()))
+					log.Error("celestia-legacy: invalid length", "len", len(tx.Data()))
 					continue
 				}
 				buf := bytes.NewBuffer(tx.Data())
 				var height uint64
 				err := binary.Read(buf, binary.BigEndian, &height)
 				if err != nil || height == 0 {
-					log.Error("celestia-legacy: invalid height", height)
+					log.Error("celestia-legacy: invalid height", "height", height)
 					continue
 				}
 				var index uint32
 				err = binary.Read(buf, binary.BigEndian, &index)
 				if err != nil || index != 0 {
-					log.Error("celestia-legacy: invalid index", index)
+					log.Error("celestia-legacy: invalid index", "index", index)
 					continue
 				}
 				log.Info("celestia-legacy: requesting block from s3")
 				data, err := downloadS3Data(ctx, daCfg, tx.Data())
 				if err != nil {
-					log.Error("celestia-legacy: s3 request failed, requesting from celestia", err)
+					log.Error("celestia-legacy: s3 request failed, requesting from celestia", "err", err)
 					blobs, err := daCfg.Client.Blob.GetAll(ctx, height, []share.Namespace{daCfg.Namespace})
 					if err != nil {
 						log.Error("celestia-legacy: celestia request failed", err)
@@ -201,8 +201,8 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 
 			case celestia.CurrentVersion: // 2
 				if daCfg == nil {
-					log.Error("missing DA_RPC url", err)
-					panic("mising DA_RPC url")
+					log.Error("missing DA_RPC url")
+					return nil, NewCriticalError(errors.New("missing DA_RPC url"))
 				}
 
 				frameRef := celestia.FrameRef{}
@@ -212,12 +212,12 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 					log.Error("unable to decode frame reference", "index", j, "err", err)
 					return nil, NewCriticalError(err)
 				}
-				log.Info("requesting data from aws", "namespace", hex.EncodeToString(daCfg.Namespace), "height", frameRef.BlockHeight)
+				log.Info("requesting data from aws", "url", fmt.Sprintf("s3://%s/%s/%x", daCfg.S3Bucket, daCfg.Namespace.String(), tx.Data()))
 				var txblob *blob.Blob
 				data, err := downloadS3Data(ctx, daCfg, tx.Data())
 				if err != nil {
-					log.Error("aws request failed", err)
-					log.Info("requesting data from celestia", "namespace", hex.EncodeToString(daCfg.Namespace), "height", frameRef.BlockHeight)
+					log.Error("aws request failed", "err", err)
+					log.Info("requesting data from celestia", "namespace", hex.EncodeToString(daCfg.Namespace), "height", frameRef.BlockHeight, "commitment", hex.EncodeToString(frameRef.TxCommitment))
 					txblob, err = daCfg.Client.Blob.Get(ctx, frameRef.BlockHeight, daCfg.Namespace, frameRef.TxCommitment)
 					if err != nil {
 						return nil, NewTemporaryError(fmt.Errorf("failed to resolve frame from celestia: %w", err))
@@ -241,7 +241,7 @@ func DataFromEVMTransactions(ctx context.Context, config *rollup.Config, daCfg *
 				out = append(out, txblob.Data)
 
 			default:
-				log.Error("invalid data type", tx.Data()[0])
+				log.Error("invalid data type", "type", tx.Data()[0])
 				continue
 			}
 		}

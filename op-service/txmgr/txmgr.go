@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	openrpc "github.com/rollkit/celestia-openrpc"
 	"github.com/rollkit/celestia-openrpc/types/blob"
 	"github.com/rollkit/celestia-openrpc/types/share"
@@ -280,12 +281,19 @@ func (m *SimpleTxManager) send(ctx context.Context, candidate TxCandidate) (*typ
 		isCelestia := false
 		if m.daClient != nil {
 			if frameRefData, err := m.payForBlob(ctx, candidate.TxData); err == nil {
-				candidate.TxData = frameRefData
-				isCelestia = true
+				intrinsicGas, err := core.IntrinsicGas(frameRefData, nil, false, true, true, false)
+				if err != nil {
+					m.l.Error("failed to calculate intrinsic gas for celestia frame", "error", err)
+				} else {
+					isCelestia = true
+					candidate.TxData = frameRefData
+					candidate.GasLimit = intrinsicGas
+				}
 			}
 		}
 		if !isCelestia {
 			candidate.TxData = append([]byte{1}, candidate.TxData...)
+			candidate.GasLimit += params.TxDataNonZeroGasEIP2028
 		}
 	}
 

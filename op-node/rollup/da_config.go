@@ -18,7 +18,7 @@ type DAConfig struct {
 	S3Bucket  string
 }
 
-func NewDAConfig(rpc, token, ns string, bucket string, region string) (*DAConfig, error) {
+func NewDAConfig(rpc, token, ns, bucket, region string) (*DAConfig, error) {
 	if len(rpc) == 0 {
 		return &DAConfig{}, nil
 	}

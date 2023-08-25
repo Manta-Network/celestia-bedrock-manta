@@ -42,30 +42,27 @@ var (
 	DaRPC = &cli.StringFlag{
 		Name:    "da-rpc",
 		Usage:   "Data Availability RPC",
-		Value:   "http://da:26658",
 		EnvVars: prefixEnvVars("DA_RPC"),
 	}
 	NamespaceId = &cli.StringFlag{
 		Name:    "namespace-id",
 		Usage:   "Namespace ID for DA node",
-		Value:   "000008e5f679bf7116cb",
 		EnvVars: prefixEnvVars("NAMESPACE_ID"),
 	}
 	AuthToken = &cli.StringFlag{
 		Name:    "auth-token",
 		Usage:   "Authentication Token for DA node",
-		Value:   "",
 		EnvVars: prefixEnvVars("AUTH_TOKEN"),
 	}
 	S3Bucket = &cli.StringFlag{
-		Name:     "s3-bucket",
-		Usage:    "S3 Bucket for DA layer",
-		EnvVars:  prefixEnvVars("S3_BUCKET"),
+		Name:    "s3-bucket",
+		Usage:   "S3 Bucket for DA layer",
+		EnvVars: prefixEnvVars("S3_BUCKET"),
 	}
 	S3Region = &cli.StringFlag{
-		Name:     "s3-region",
-		Usage:    "S3 Region for DA layer",
-		EnvVars:  prefixEnvVars("S3_REGION"),
+		Name:    "s3-region",
+		Usage:   "S3 Region for DA layer",
+		EnvVars: prefixEnvVars("S3_REGION"),
 	}
 	/* Optional Flags */
 	Network = &cli.StringFlag{

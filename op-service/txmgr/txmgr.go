@@ -215,37 +215,37 @@ func (m *SimpleTxManager) uploadS3Data(ctx context.Context, frameRefData []byte,
 func (m *SimpleTxManager) payForBlob(ctx context.Context, txData []byte) ([]byte, error) {
 	dataBlob, err := blob.NewBlobV0(m.namespace, txData)
 	if err != nil {
-		m.l.Warn("unable to create celestia blob", "err", err)
+		m.l.Error("unable to create celestia blob", "err", err)
 		return nil, err
 	}
 	com, err := blob.CreateCommitment(dataBlob)
 	if err != nil {
-		m.l.Warn("unable to create blob commitment to celestia", "err", err)
+		m.l.Error("unable to create blob commitment to celestia", "err", err)
 		return nil, err
 	}
 	err = m.daClient.Header.SyncWait(ctx)
 	if err != nil {
-		m.l.Warn("unable to wait for celestia header sync", "err", err)
+		m.l.Error("unable to wait for celestia header sync", "err", err)
 		return nil, err
 	}
 	height, err := m.daClient.Blob.Submit(ctx, []*blob.Blob{dataBlob})
 	if err != nil {
-		m.l.Warn("unable to publish tx to celestia", "err", err)
+		m.l.Error("unable to publish tx to celestia", "err", err)
 		return nil, err
 	}
 	fmt.Printf("height: %v\n", height)
 	if height == 0 {
-		m.l.Warn("unexpected response from celestia got", "height", height)
+		m.l.Error("unexpected response from celestia got", "height", height)
 		return nil, errors.New("unexpected response code")
 	}
 	proof, err := m.daClient.Blob.GetProof(ctx, height, m.namespace, com)
 	if err != nil {
-		m.l.Warn("unable to get celestia proof")
+		m.l.Error("unable to get celestia proof", "err", err)
 		return nil, err
 	}
 	included, err := m.daClient.Blob.Included(ctx, height, m.namespace, proof, com)
 	if err != nil {
-		m.l.Warn("unable to get celestia inclusion status")
+		m.l.Error("unable to get celestia inclusion status", "err", err)
 		return nil, err
 	}
 	if included == false {
@@ -258,12 +258,12 @@ func (m *SimpleTxManager) payForBlob(ctx context.Context, txData []byte) ([]byte
 	}
 	frameRefData, err := frameRef.MarshalBinary()
 	if err != nil {
-		m.l.Warn("frameRef.MarshalBinary() failed")
+		m.l.Error("frameRef.MarshalBinary() failed", "err", err)
 		return nil, err
 	}
 	// Backup to aws bucket
 	if err := m.uploadS3Data(ctx, frameRefData, txData); err != nil {
-		m.l.Warn("failed to upload to s3")
+		m.l.Error("failed to upload to s3", "err", err)
 		return nil, err
 	}
 	return frameRefData, nil
@@ -285,6 +285,7 @@ func (m *SimpleTxManager) send(ctx context.Context, candidate TxCandidate) (*typ
 				if err != nil {
 					m.l.Error("failed to calculate intrinsic gas for celestia frame", "error", err)
 				} else {
+					m.l.Info("posted data to celestia", "frameRef", hex.EncodeToString(frameRefData))
 					isCelestia = true
 					candidate.TxData = frameRefData
 					candidate.GasLimit = intrinsicGas

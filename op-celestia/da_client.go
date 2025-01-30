@@ -22,7 +22,7 @@ type DAClient struct {
 	S3Bucket     string
 }
 
-func NewDAClient(rpc, token, namespace, fallbackMode string, gasPrice float64, auth bool) (*DAClient, error) {
+func NewDAClient(rpc, token, namespace, fallbackMode string, gasPrice float64, s3region string, s3bucket string, auth bool) (*DAClient, error) {
 	client, err := proxy.NewClient(rpc, token)
 	if err != nil {
 		return nil, err
@@ -37,14 +37,14 @@ func NewDAClient(rpc, token, namespace, fallbackMode string, gasPrice float64, a
 	var s3Client *s3.Client
 	if auth {
 		awscfg, err := config.LoadDefaultConfig(context.Background(),
-			config.WithRegion(cfg.S3Region),
+			config.WithRegion(s3region),
 		)
 		if err != nil {
 			return nil, err
 		}
 		s3Client = s3.NewFromConfig(awscfg)
 	} else {
-		s3Client = s3.New(s3.Options{Region: cfg.S3Region})
+		s3Client = s3.New(s3.Options{Region: s3region})
 	}
 	return &DAClient{
 		Client:       client,
@@ -53,7 +53,6 @@ func NewDAClient(rpc, token, namespace, fallbackMode string, gasPrice float64, a
 		FallbackMode: fallbackMode,
 		GasPrice:     gasPrice,
 		S3Client:     s3Client,
-		S3Bucket:     cfg.S3Bucket,
-		GetTimeout:   cfg.Timeout,
+		S3Bucket:     s3bucket,
 	}, nil
 }

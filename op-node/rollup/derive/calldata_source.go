@@ -140,33 +140,18 @@ func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address,
 						blobs, err := daClient.Client.Get(ctx2, [][]byte{data[1:]}, daClient.Namespace)
 						cancel()
 						if err != nil || len(blobs) != 1 {
-							return nil, NewTemporaryError(fmt.Errorf("celestia: failed to resolve frame: %w, len=", err, len(blobs)))
+							return nil, NewTemporaryError(fmt.Errorf("celestia: failed to resolve frame: %w, len=%q", err, len(blobs)))
 						}
 						blob = blobs[0]
 					}
 					ctx3, cancel := context.WithTimeout(context.Background(), daClient.GetTimeout)
 					commit, err := daClient.Client.Commit(ctx3, [][]byte{blob}, daClient.Namespace)
+					cancel()
 					byteArray := [][]byte(commit)
 					if err != nil || !bytes.Equal(byteArray[0], data[9:]) {
-						//return nil, NewTemporaryError(fmt.Errorf("celestia: invalid commitment: calldata=%x commit=%x err=%w", data, commit, err))
 						log.Warn("celestia: invalid commitment: calldata=%x commit=%x err=%w", data, commit, err)
 					}
 					out = append(out, blob)
-					// log.Info("celestia: blob request", "id", hex.EncodeToString(tx.Data()))
-					// ctx, cancel := context.WithTimeout(context.Background(), daClient.GetTimeout)
-					// blobs, err := daClient.Client.Get(ctx, [][]byte{data[1:]}, daClient.Namespace)
-					// cancel()
-					// if err != nil {
-					// 	return nil, NewResetError(fmt.Errorf("celestia: failed to resolve frame: %w", err))
-					// }
-					// if len(blobs) != 1 {
-					// 	log.Warn("celestia: unexpected length for blobs", "expected", 1, "got", len(blobs))
-					// 	if len(blobs) == 0 {
-					// 		log.Warn("celestia: skipping empty blobs")
-					// 		continue
-					// 	}
-					// }
-					// out = append(out, blobs[0])
 				default:
 					out = append(out, data)
 					log.Info("celestia: using eth fallback")
@@ -177,7 +162,13 @@ func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address,
 	return out, nil
 }
 
+// 00000000000000000000000000000000000000ca1de12a6d29fe535f2d
+// namespace input ^^ and have to strip down to 10
 func downloadS3Data(ctx context.Context, frameRefData []byte) ([]byte, error) {
+	if len(daClient.Namespace) != 29 {
+		return nil, fmt.Errorf("Error: Expected 29 bytes, got %x", len(daClient.Namespace))
+	}
+
 	resp, err := daClient.S3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: &daClient.S3Bucket,
 		Key:    aws.String(fmt.Sprintf("%x/%x", daClient.Namespace, frameRefData)),

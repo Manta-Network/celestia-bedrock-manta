@@ -909,6 +909,10 @@ func (l *BatchSubmitter) celestiaTxCandidate(data []byte) (*txmgr.TxCandidate, e
 }
 
 func (l *BatchSubmitter) uploadS3Data(ctx context.Context, frameRefData []byte, txData []byte) error {
+	if len(l.DAClient.Namespace) != 29 {
+		return fmt.Errorf("Error: Expected 29 bytes, got %x", len(l.DAClient.Namespace))
+	}
+
 	_, err := l.DAClient.S3Client.PutObject(ctx, &s3.PutObjectInput{
 		Body:   bytes.NewReader(txData),
 		Bucket: &l.DAClient.S3Bucket,

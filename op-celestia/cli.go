@@ -51,14 +51,16 @@ func CLIFlags(envPrefix string) []cli.Flag {
 			EnvVars: opservice.PrefixEnvVar(envPrefix, "DA_RPC"),
 		},
 		&cli.StringFlag{
-			Name:    AuthTokenFlagName,
-			Usage:   "authentication token of the data availability client",
-			EnvVars: opservice.PrefixEnvVar(envPrefix, "DA_AUTH_TOKEN"),
+			Name:  AuthTokenFlagName,
+			Usage: "authentication token of the data availability client",
+			//EnvVars: opservice.PrefixEnvVar(envPrefix, "DA_AUTH_TOKEN"),//CALDERA DOES NOT TOLERATE DA PREFIX
+			EnvVars: opservice.PrefixEnvVar(envPrefix, "AUTH_TOKEN"),
 		},
 		&cli.StringFlag{
-			Name:    NamespaceFlagName,
-			Usage:   "namespace of the data availability client",
-			EnvVars: opservice.PrefixEnvVar(envPrefix, "DA_NAMESPACE"),
+			Name:  NamespaceFlagName,
+			Usage: "namespace of the data availability client",
+			//EnvVars: opservice.PrefixEnvVar(envPrefix, "DA_NAMESPACE"),//CALDERA DOES NOT TOLERATE DA PREFIX
+			EnvVars: opservice.PrefixEnvVar(envPrefix, "NAMESPACE_ID"),
 		},
 		&cli.BoolFlag{
 			Name:    EthFallbackDisabledFlagName,

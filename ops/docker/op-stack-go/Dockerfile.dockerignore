@@ -1,7 +1,7 @@
 # All the files we depend on. We are using a negative pattern to not include anything by accident.
 # node_modules, packages (contains git submodules and node modules etc.), devnet dirs etc. all add up a lot.
 *
-
+!/go-ethereum-kms-signer
 !/cannon
 !/op-batcher
 !/op-bootnode

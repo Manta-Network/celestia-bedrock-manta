@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/rollkit/go-da"
 	"github.com/rollkit/go-da/proxy"
 )
@@ -27,6 +28,16 @@ func NewDAClient(rpc, token, namespace, fallbackMode string, gasPrice float64, s
 	if err != nil {
 		return nil, err
 	}
+
+	//CALDERA does not tolarate 58 size strings for namespace
+	//we have to fix this here
+	//and then again adjust in calldata_source downloadS3Data and driver.go uploadS3Data to trim
+	log.Warn("Checking namespace for backwards compatibility.", "len", len(namespace))
+	if len(namespace) != 58 {
+		namespace = "00000000000000000000000000000000000000" + namespace
+		log.Warn("Namespace has been adjusted.", "namespace", namespace)
+	}
+
 	ns, err := hex.DecodeString(namespace)
 	if err != nil {
 		return nil, err

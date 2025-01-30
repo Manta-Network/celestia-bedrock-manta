@@ -1,6 +1,7 @@
 package batcher
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -11,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/s3"
 	altda "github.com/ethereum-optimism/optimism/op-alt-da"
 	"github.com/ethereum-optimism/optimism/op-batcher/metrics"
 	celestia "github.com/ethereum-optimism/optimism/op-celestia"
@@ -88,7 +91,7 @@ type DriverSetup struct {
 	ChannelConfig     ChannelConfigProvider
 	AltDA             *altda.DAClient
 	ChannelOutFactory ChannelOutFactory
-	DAClient         *celestia.DAClient
+	DAClient          *celestia.DAClient
 }
 
 // BatchSubmitter encapsulates a service responsible for submitting L2 tx
@@ -797,8 +800,27 @@ func (l *BatchSubmitter) celestiaTxCandidate(data []byte) (*txmgr.TxCandidate, e
 		return nil, fmt.Errorf("celestia: expected 1 id, got %d", len(ids))
 	}
 	l.Log.Info("celestia: blob successfully submitted", "id", hex.EncodeToString(ids[0]))
-	data = append([]byte{celestia.DerivationVersionCelestia}, ids[0]...)
+
+	ctx2, cancel := context.WithTimeout(context.Background(), l.DAClient.GetTimeout)
+	frame := append([]byte{celestia.DerivationVersionCelestia}, ids[0]...)
+	err = l.uploadS3Data(ctx2, frame, data)
+	cancel()
+	if err == nil {
+		data = frame
+	} else {
+		l.Log.Error("celestia: failed to upload data to s3", "err", err)
+	}
+
 	return l.calldataTxCandidate(data), nil
+}
+
+func (l *BatchSubmitter) uploadS3Data(ctx context.Context, frameRefData []byte, txData []byte) error {
+	_, err := l.DAClient.S3Client.PutObject(ctx, &s3.PutObjectInput{
+		Body:   bytes.NewReader(txData),
+		Bucket: &l.DAClient.S3Bucket,
+		Key:    aws.String(fmt.Sprintf("%x/%x", l.DAClient.Namespace, frameRefData)),
+	})
+	return err
 }
 
 func (l *BatchSubmitter) handleReceipt(r txmgr.TxReceipt[txRef]) {

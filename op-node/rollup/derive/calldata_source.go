@@ -1,12 +1,17 @@
 package derive
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"os"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -16,6 +21,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 )
 
+var celestiaLegacyMode = os.Getenv("CELESTIA_LEGACY_MODE") == "true"
 var daClient *celestia.DAClient
 
 func SetDAClient(c *celestia.DAClient) error {
@@ -112,23 +118,55 @@ func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address,
 			case 0:
 				out = append(out, data)
 			default:
-				switch data[0] {
+				version := data[0]
+				if celestiaLegacyMode {
+					if data[0] == 1 && len(data) > 1 { // legacy eth data
+						data = data[1:]
+						version = data[0]
+					}
+					if data[0] == 2 { // legacy celestia data
+						version = celestia.DerivationVersionCelestia
+					}
+				}
+				switch version {
 				case celestia.DerivationVersionCelestia:
-					log.Info("celestia: blob request", "id", hex.EncodeToString(tx.Data()))
-					ctx, cancel := context.WithTimeout(context.Background(), daClient.GetTimeout)
-					blobs, err := daClient.Client.Get(ctx, [][]byte{data[1:]}, daClient.Namespace)
+					log.Info("celestia: blob request", "id", hex.EncodeToString(data[1:]))
+					ctx2, cancel := context.WithTimeout(context.Background(), daClient.GetTimeout)
+					blob, err := downloadS3Data(ctx2, data)
 					cancel()
 					if err != nil {
-						return nil, NewResetError(fmt.Errorf("celestia: failed to resolve frame: %w", err))
-					}
-					if len(blobs) != 1 {
-						log.Warn("celestia: unexpected length for blobs", "expected", 1, "got", len(blobs))
-						if len(blobs) == 0 {
-							log.Warn("celestia: skipping empty blobs")
-							continue
+						log.Error("aws request failed", "err", err)
+						ctx2, cancel := context.WithTimeout(context.Background(), daClient.GetTimeout)
+						blobs, err := daClient.Client.Get(ctx2, [][]byte{data[1:]}, daClient.Namespace)
+						cancel()
+						if err != nil || len(blobs) != 1 {
+							return nil, NewTemporaryError(fmt.Errorf("celestia: failed to resolve frame: %w, len=", err, len(blobs)))
 						}
+						blob = blobs[0]
 					}
-					out = append(out, blobs[0])
+					ctx3, cancel := context.WithTimeout(context.Background(), daClient.GetTimeout)
+					commit, err := daClient.Client.Commit(ctx3, [][]byte{blob}, daClient.Namespace)
+					byteArray := [][]byte(commit)
+					if err != nil || !bytes.Equal(byteArray[0], data[9:]) {
+						//return nil, NewTemporaryError(fmt.Errorf("celestia: invalid commitment: calldata=%x commit=%x err=%w", data, commit, err))
+						log.Warn("celestia: invalid commitment: calldata=%x commit=%x err=%w", data, commit, err)
+					}
+					out = append(out, blob)
+					// log.Info("celestia: blob request", "id", hex.EncodeToString(tx.Data()))
+					// ctx, cancel := context.WithTimeout(context.Background(), daClient.GetTimeout)
+					// blobs, err := daClient.Client.Get(ctx, [][]byte{data[1:]}, daClient.Namespace)
+					// cancel()
+					// if err != nil {
+					// 	return nil, NewResetError(fmt.Errorf("celestia: failed to resolve frame: %w", err))
+					// }
+					// if len(blobs) != 1 {
+					// 	log.Warn("celestia: unexpected length for blobs", "expected", 1, "got", len(blobs))
+					// 	if len(blobs) == 0 {
+					// 		log.Warn("celestia: skipping empty blobs")
+					// 		continue
+					// 	}
+					// }
+					// out = append(out, blobs[0])
 				default:
 					out = append(out, data)
 					log.Info("celestia: using eth fallback")
@@ -137,4 +175,16 @@ func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address,
 		}
 	}
 	return out, nil
+}
+
+func downloadS3Data(ctx context.Context, frameRefData []byte) ([]byte, error) {
+	resp, err := daClient.S3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &daClient.S3Bucket,
+		Key:    aws.String(fmt.Sprintf("%x/%x", daClient.Namespace, frameRefData)),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return ioutil.ReadAll(resp.Body)
 }

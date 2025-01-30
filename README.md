@@ -140,7 +140,6 @@ npx hardhat deposit --network devnetL1 --l1-provider-url http://localhost:8545 -
 <pre>
 ├── <a href="./docs">docs</a>: A collection of documents including audits and post-mortems
 ├── <a href="./op-batcher">op-batcher</a>: L2-Batch Submitter, submits bundles of batches to L1
-├── <a href="./op-bootnode">op-bootnode</a>: Standalone op-node discovery bootnode
 ├── <a href="./op-chain-ops">op-chain-ops</a>: State surgery utilities
 ├── <a href="./op-challenger">op-challenger</a>: Dispute game challenge agent
 ├── <a href="./op-e2e">op-e2e</a>: End-to-End testing of all bedrock components in Go
@@ -155,8 +154,7 @@ npx hardhat deposit --network devnetL1 --l1-provider-url http://localhost:8545 -
 ├── <a href="./ops-bedrock">ops-bedrock</a>: Bedrock devnet work
 ├── <a href="./packages">packages</a>
 │   ├── <a href="./packages/contracts-bedrock">contracts-bedrock</a>: OP Stack smart contracts
-├── <a href="./proxyd">proxyd</a>: Configurable RPC request router and proxy
-├── <a href="./specs">specs</a>: Specs of the rollup starting at the Bedrock upgrade
+├── <a href="./semgrep">semgrep</a>: Semgrep rules and tests
 </pre>
 
 ## Development and Release Process
@@ -176,7 +174,7 @@ For contract releases, refer to the GitHub release notes for a given release whi
 
 Tags of the form `v<semver>`, such as `v1.1.4`, indicate releases of all Go code only, and **DO NOT** include smart contracts.
 This naming scheme is required by Golang.
-In the above list, this means these `v<semver` releases contain all `op-*` components and exclude all `contracts-*` components.
+In the above list, this means these `v<semver>` releases contain all `op-*` components and exclude all `contracts-*` components.
 
 `op-geth` embeds upstream geth’s version inside its own version as follows: `vMAJOR.GETH_MAJOR GETH_MINOR GETH_PATCH.PATCH`.
 Basically, geth’s version is our minor version.

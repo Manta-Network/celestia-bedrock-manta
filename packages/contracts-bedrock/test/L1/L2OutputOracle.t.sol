@@ -15,12 +15,34 @@ import { Proxy } from "src/universal/Proxy.sol";
 
 // Target contract
 import { L2OutputOracle } from "src/L1/L2OutputOracle.sol";
-import { IL2OutputOracle } from "src/L1/interfaces/IL2OutputOracle.sol";
+import { IL2OutputOracle } from "interfaces/L1/IL2OutputOracle.sol";
 
 contract L2OutputOracle_TestBase is CommonTest {
     function setUp() public override {
         super.enableLegacyContracts();
         super.setUp();
+    }
+
+    /// @dev Helper function to propose an output.
+    function proposeAnotherOutput() public {
+        bytes32 proposedOutput2 = keccak256(abi.encode());
+        uint256 nextBlockNumber = l2OutputOracle.nextBlockNumber();
+        uint256 nextOutputIndex = l2OutputOracle.nextOutputIndex();
+        warpToProposeTime(nextBlockNumber);
+        uint256 proposedNumber = l2OutputOracle.latestBlockNumber();
+
+        uint256 submissionInterval = deploy.cfg().l2OutputOracleSubmissionInterval();
+        // Ensure the submissionInterval is enforced
+        assertEq(nextBlockNumber, proposedNumber + submissionInterval);
+
+        vm.roll(nextBlockNumber + 1);
+
+        vm.expectEmit(true, true, true, true);
+        emit OutputProposed(proposedOutput2, nextOutputIndex, nextBlockNumber, block.timestamp);
+
+        address proposer = deploy.cfg().l2OutputOracleProposer();
+        vm.prank(proposer);
+        l2OutputOracle.proposeL2Output(proposedOutput2, nextBlockNumber, 0, 0);
     }
 
     /// @dev Tests that constructor sets the initial values correctly.
@@ -99,6 +121,31 @@ contract L2OutputOracle_getter_Test is L2OutputOracle_TestBase {
         l2OutputOracle.getL2Output(nextOutputIndex + 1);
     }
 
+    /// @dev Tests that `getL2OutputAfter` of an L2 block number returns the L2 output of the `getL2OutputIndexAfter` of
+    /// that block number.
+    function test_getL2OutputAfter_succeeds() external {
+        uint8 iterations = 5;
+
+        Types.OutputProposal memory output;
+        Types.OutputProposal memory expectedOutput;
+
+        for (uint8 i; i < iterations; i++) {
+            proposeAnotherOutput();
+        }
+
+        uint256 latestBlockNumber = l2OutputOracle.latestBlockNumber();
+        for (uint8 i = iterations - 1; i > 0; i--) {
+            uint256 index = l2OutputOracle.getL2OutputIndexAfter(latestBlockNumber);
+            output = l2OutputOracle.getL2OutputAfter(latestBlockNumber);
+            expectedOutput = l2OutputOracle.getL2Output(index);
+            assertEq(output.outputRoot, expectedOutput.outputRoot);
+            assertEq(output.timestamp, expectedOutput.timestamp);
+            assertEq(output.l2BlockNumber, expectedOutput.l2BlockNumber);
+
+            latestBlockNumber -= l2OutputOracle.SUBMISSION_INTERVAL();
+        }
+    }
+
     /// @dev Tests that `getL2OutputIndexAfter` returns the correct value
     ///      when the input is the exact block number of the proposal.
     function test_getL2OutputIndexAfter_sameBlock_succeeds() external {
@@ -111,6 +158,10 @@ contract L2OutputOracle_getter_Test is L2OutputOracle_TestBase {
         // Querying with exact same block as proposed returns the proposal.
         uint256 index1 = l2OutputOracle.getL2OutputIndexAfter(nextBlockNumber1);
         assertEq(index1, 0);
+        assertEq(
+            keccak256(abi.encode(l2OutputOracle.getL2Output(index1))),
+            keccak256(abi.encode(output1, block.timestamp, nextBlockNumber1))
+        );
     }
 
     /// @dev Tests that `getL2OutputIndexAfter` returns the correct value
@@ -125,6 +176,10 @@ contract L2OutputOracle_getter_Test is L2OutputOracle_TestBase {
         // Querying with previous block returns the proposal too.
         uint256 index1 = l2OutputOracle.getL2OutputIndexAfter(nextBlockNumber1 - 1);
         assertEq(index1, 0);
+        assertEq(
+            keccak256(abi.encode(l2OutputOracle.getL2Output(index1))),
+            keccak256(abi.encode(output1, block.timestamp, nextBlockNumber1))
+        );
     }
 
     /// @dev Tests that `getL2OutputIndexAfter` returns the correct value.
@@ -156,14 +211,26 @@ contract L2OutputOracle_getter_Test is L2OutputOracle_TestBase {
         // Querying with a block number between the first and second proposal
         uint256 index1 = l2OutputOracle.getL2OutputIndexAfter(nextBlockNumber1 + 1);
         assertEq(index1, 1);
+        assertEq(
+            keccak256(abi.encode(l2OutputOracle.getL2Output(index1))),
+            keccak256(abi.encode(output2, l2OutputOracle.computeL2Timestamp(nextBlockNumber2) + 1, nextBlockNumber2))
+        );
 
         // Querying with a block number between the second and third proposal
         uint256 index2 = l2OutputOracle.getL2OutputIndexAfter(nextBlockNumber2 + 1);
         assertEq(index2, 2);
+        assertEq(
+            keccak256(abi.encode(l2OutputOracle.getL2Output(index2))),
+            keccak256(abi.encode(output3, l2OutputOracle.computeL2Timestamp(nextBlockNumber3) + 1, nextBlockNumber3))
+        );
 
         // Querying with a block number between the third and fourth proposal
         uint256 index3 = l2OutputOracle.getL2OutputIndexAfter(nextBlockNumber3 + 1);
         assertEq(index3, 3);
+        assertEq(
+            keccak256(abi.encode(l2OutputOracle.getL2Output(index3))),
+            keccak256(abi.encode(output4, l2OutputOracle.computeL2Timestamp(nextBlockNumber4) + 1, nextBlockNumber4))
+        );
     }
 
     /// @dev Tests that `getL2OutputIndexAfter` reverts when no output exists.
@@ -422,7 +489,7 @@ contract L2OutputOracleUpgradeable_Test is L2OutputOracle_TestBase {
         vm.startPrank(EIP1967Helper.getAdmin(address(proxy)));
         // Reviewer note: the NextImpl() still uses reinitializer. If we want to remove that, we'll need to use a
         //   two step upgrade with the Storage lib.
-        proxy.upgradeToAndCall(address(nextImpl), abi.encodeWithSelector(NextImpl.initialize.selector, 2));
+        proxy.upgradeToAndCall(address(nextImpl), abi.encodeCall(NextImpl.initialize, (2)));
         assertEq(proxy.implementation(), address(nextImpl));
 
         // Verify that the NextImpl contract initialized its values according as expected

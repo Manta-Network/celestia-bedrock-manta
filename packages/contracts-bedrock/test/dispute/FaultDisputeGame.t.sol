@@ -6,6 +6,7 @@ import { Test } from "forge-std/Test.sol";
 import { Vm } from "forge-std/Vm.sol";
 import { DisputeGameFactory_Init } from "test/dispute/DisputeGameFactory.t.sol";
 import { AlphabetVM } from "test/mocks/AlphabetVM.sol";
+import { stdError } from "forge-std/StdError.sol";
 
 // Scripts
 import { DeployUtils } from "scripts/libraries/DeployUtils.sol";
@@ -23,11 +24,11 @@ import "src/dispute/lib/Types.sol";
 import "src/dispute/lib/Errors.sol";
 
 // Interfaces
-import { IDisputeGame } from "src/dispute/interfaces/IDisputeGame.sol";
-import { IPreimageOracle } from "src/dispute/interfaces/IBigStepper.sol";
-import { IAnchorStateRegistry } from "src/dispute/interfaces/IAnchorStateRegistry.sol";
-import { IFaultDisputeGame } from "src/dispute/interfaces/IFaultDisputeGame.sol";
-import { IDelayedWETH } from "src/dispute/interfaces/IDelayedWETH.sol";
+import { IDisputeGame } from "interfaces/dispute/IDisputeGame.sol";
+import { IPreimageOracle } from "interfaces/dispute/IBigStepper.sol";
+import { IAnchorStateRegistry } from "interfaces/dispute/IAnchorStateRegistry.sol";
+import { IFaultDisputeGame } from "interfaces/dispute/IFaultDisputeGame.sol";
+import { IDelayedWETH } from "interfaces/dispute/IDelayedWETH.sol";
 
 contract FaultDisputeGame_Init is DisputeGameFactory_Init {
     /// @dev The type of the game being tested.
@@ -72,16 +73,18 @@ contract FaultDisputeGame_Init is DisputeGameFactory_Init {
                     abi.encodeCall(
                         IFaultDisputeGame.__constructor__,
                         (
-                            GAME_TYPE,
-                            absolutePrestate,
-                            2 ** 3,
-                            2 ** 2,
-                            Duration.wrap(3 hours),
-                            Duration.wrap(3.5 days),
-                            _vm,
-                            delayedWeth,
-                            anchorStateRegistry,
-                            10
+                            IFaultDisputeGame.GameConstructorParams({
+                                gameType: GAME_TYPE,
+                                absolutePrestate: absolutePrestate,
+                                maxGameDepth: 2 ** 3,
+                                splitDepth: 2 ** 2,
+                                clockExtension: Duration.wrap(3 hours),
+                                maxClockDuration: Duration.wrap(3.5 days),
+                                vm: _vm,
+                                weth: delayedWeth,
+                                anchorStateRegistry: anchorStateRegistry,
+                                l2ChainId: 10
+                            })
                         )
                     )
                 )
@@ -153,16 +156,18 @@ contract FaultDisputeGame_Test is FaultDisputeGame_Init {
                 abi.encodeCall(
                     IFaultDisputeGame.__constructor__,
                     (
-                        GAME_TYPE,
-                        absolutePrestate,
-                        _maxGameDepth,
-                        _maxGameDepth + 1,
-                        Duration.wrap(3 hours),
-                        Duration.wrap(3.5 days),
-                        alphabetVM,
-                        IDelayedWETH(payable(address(0))),
-                        IAnchorStateRegistry(address(0)),
-                        10
+                        IFaultDisputeGame.GameConstructorParams({
+                            gameType: GAME_TYPE,
+                            absolutePrestate: absolutePrestate,
+                            maxGameDepth: _maxGameDepth,
+                            splitDepth: _maxGameDepth + 1,
+                            clockExtension: Duration.wrap(3 hours),
+                            maxClockDuration: Duration.wrap(3.5 days),
+                            vm: alphabetVM,
+                            weth: IDelayedWETH(payable(address(0))),
+                            anchorStateRegistry: IAnchorStateRegistry(address(0)),
+                            l2ChainId: 10
+                        })
                     )
                 )
             )
@@ -186,9 +191,7 @@ contract FaultDisputeGame_Test is FaultDisputeGame_Init {
         // PreimageOracle constructor will revert if the challenge period is too large, so we need
         // to mock the call to pretend this is a bugged implementation where the challenge period
         // is allowed to be too large.
-        vm.mockCall(
-            address(oracle), abi.encodeWithSelector(oracle.challengePeriod.selector), abi.encode(_challengePeriod)
-        );
+        vm.mockCall(address(oracle), abi.encodeCall(IPreimageOracle.challengePeriod, ()), abi.encode(_challengePeriod));
 
         vm.expectRevert(InvalidChallengePeriod.selector);
         DeployUtils.create1({
@@ -197,16 +200,18 @@ contract FaultDisputeGame_Test is FaultDisputeGame_Init {
                 abi.encodeCall(
                     IFaultDisputeGame.__constructor__,
                     (
-                        GAME_TYPE,
-                        absolutePrestate,
-                        2 ** 3,
-                        2 ** 2,
-                        Duration.wrap(3 hours),
-                        Duration.wrap(3.5 days),
-                        alphabetVM,
-                        IDelayedWETH(payable(address(0))),
-                        IAnchorStateRegistry(address(0)),
-                        10
+                        IFaultDisputeGame.GameConstructorParams({
+                            gameType: GAME_TYPE,
+                            absolutePrestate: absolutePrestate,
+                            maxGameDepth: 2 ** 3,
+                            splitDepth: 2 ** 2,
+                            clockExtension: Duration.wrap(3 hours),
+                            maxClockDuration: Duration.wrap(3.5 days),
+                            vm: alphabetVM,
+                            weth: IDelayedWETH(payable(address(0))),
+                            anchorStateRegistry: IAnchorStateRegistry(address(0)),
+                            l2ChainId: 10
+                        })
                     )
                 )
             )
@@ -235,16 +240,18 @@ contract FaultDisputeGame_Test is FaultDisputeGame_Init {
                 abi.encodeCall(
                     IFaultDisputeGame.__constructor__,
                     (
-                        GAME_TYPE,
-                        absolutePrestate,
-                        maxGameDepth,
-                        _splitDepth,
-                        Duration.wrap(3 hours),
-                        Duration.wrap(3.5 days),
-                        alphabetVM,
-                        IDelayedWETH(payable(address(0))),
-                        IAnchorStateRegistry(address(0)),
-                        10
+                        IFaultDisputeGame.GameConstructorParams({
+                            gameType: GAME_TYPE,
+                            absolutePrestate: absolutePrestate,
+                            maxGameDepth: maxGameDepth,
+                            splitDepth: _splitDepth,
+                            clockExtension: Duration.wrap(3 hours),
+                            maxClockDuration: Duration.wrap(3.5 days),
+                            vm: alphabetVM,
+                            weth: IDelayedWETH(payable(address(0))),
+                            anchorStateRegistry: IAnchorStateRegistry(address(0)),
+                            l2ChainId: 10
+                        })
                     )
                 )
             )
@@ -273,16 +280,18 @@ contract FaultDisputeGame_Test is FaultDisputeGame_Init {
                 abi.encodeCall(
                     IFaultDisputeGame.__constructor__,
                     (
-                        GAME_TYPE,
-                        absolutePrestate,
-                        2 ** 3,
-                        _splitDepth,
-                        Duration.wrap(3 hours),
-                        Duration.wrap(3.5 days),
-                        alphabetVM,
-                        IDelayedWETH(payable(address(0))),
-                        IAnchorStateRegistry(address(0)),
-                        10
+                        IFaultDisputeGame.GameConstructorParams({
+                            gameType: GAME_TYPE,
+                            absolutePrestate: absolutePrestate,
+                            maxGameDepth: 2 ** 3,
+                            splitDepth: _splitDepth,
+                            clockExtension: Duration.wrap(3 hours),
+                            maxClockDuration: Duration.wrap(3.5 days),
+                            vm: alphabetVM,
+                            weth: IDelayedWETH(payable(address(0))),
+                            anchorStateRegistry: IAnchorStateRegistry(address(0)),
+                            l2ChainId: 10
+                        })
                     )
                 )
             )
@@ -319,16 +328,18 @@ contract FaultDisputeGame_Test is FaultDisputeGame_Init {
                 abi.encodeCall(
                     IFaultDisputeGame.__constructor__,
                     (
-                        GAME_TYPE,
-                        absolutePrestate,
-                        16,
-                        8,
-                        Duration.wrap(_clockExtension),
-                        Duration.wrap(_maxClockDuration),
-                        alphabetVM,
-                        IDelayedWETH(payable(address(0))),
-                        IAnchorStateRegistry(address(0)),
-                        10
+                        IFaultDisputeGame.GameConstructorParams({
+                            gameType: GAME_TYPE,
+                            absolutePrestate: absolutePrestate,
+                            maxGameDepth: 16,
+                            splitDepth: 8,
+                            clockExtension: Duration.wrap(_clockExtension),
+                            maxClockDuration: Duration.wrap(_maxClockDuration),
+                            vm: alphabetVM,
+                            weth: IDelayedWETH(payable(address(0))),
+                            anchorStateRegistry: IAnchorStateRegistry(address(0)),
+                            l2ChainId: 10
+                        })
                     )
                 )
             )
@@ -450,6 +461,17 @@ contract FaultDisputeGame_Test is FaultDisputeGame_Init {
         gameProxy.initialize();
     }
 
+    /// @dev Tests that startingOutputRoot and it's getters are set correctly.
+    function test_startingOutputRootGetters_succeeds() public view {
+        (Hash root, uint256 l2BlockNumber) = gameProxy.startingOutputRoot();
+        (Hash anchorRoot, uint256 anchorRootBlockNumber) = anchorStateRegistry.anchors(GAME_TYPE);
+
+        assertEq(gameProxy.startingBlockNumber(), l2BlockNumber);
+        assertEq(gameProxy.startingBlockNumber(), anchorRootBlockNumber);
+        assertEq(Hash.unwrap(gameProxy.startingRootHash()), Hash.unwrap(root));
+        assertEq(Hash.unwrap(gameProxy.startingRootHash()), Hash.unwrap(anchorRoot));
+    }
+
     /// @dev Tests that the user cannot control the first 4 bytes of the CWIA data, disallowing them to control the
     ///      entrypoint when no calldata is provided to a call.
     function test_cwiaCalldata_userCannotControlSelector_succeeds() public {
@@ -536,11 +558,11 @@ contract FaultDisputeGame_Test is FaultDisputeGame_Init {
         Claim claim = _dummyClaim();
 
         // Expect an out of bounds revert for an attack
-        vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x32));
+        vm.expectRevert(stdError.indexOOBError);
         gameProxy.attack(_dummyClaim(), 1, claim);
 
         // Expect an out of bounds revert for a defense
-        vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x32));
+        vm.expectRevert(stdError.indexOOBError);
         gameProxy.defend(_dummyClaim(), 1, claim);
     }
 
@@ -1704,14 +1726,14 @@ contract FaultDisputeGame_Test is FaultDisputeGame_Init {
     /// resolves in favor of the defender but the game state is not newer than the anchor state.
     function test_resolve_validOlderStateSameAnchor_succeeds() public {
         // Mock the game block to be older than the game state.
-        vm.mockCall(address(gameProxy), abi.encodeWithSelector(gameProxy.l2BlockNumber.selector), abi.encode(0));
+        vm.mockCall(address(gameProxy), abi.encodeCall(gameProxy.l2BlockNumber, ()), abi.encode(0));
 
         // Confirm that the anchor state is newer than the game state.
         (Hash root, uint256 l2BlockNumber) = anchorStateRegistry.anchors(gameProxy.gameType());
         assert(l2BlockNumber >= gameProxy.l2BlockNumber());
 
         // Resolve the game.
-        vm.mockCall(address(gameProxy), abi.encodeWithSelector(gameProxy.l2BlockNumber.selector), abi.encode(0));
+        vm.mockCall(address(gameProxy), abi.encodeCall(gameProxy.l2BlockNumber, ()), abi.encode(0));
         vm.warp(block.timestamp + 3 days + 12 hours);
         gameProxy.resolveClaim(0, 0);
         assertEq(uint8(gameProxy.resolve()), uint8(GameStatus.DEFENDER_WINS));
@@ -1985,6 +2007,18 @@ contract FaultDisputeGame_Test is FaultDisputeGame_Init {
         (dat, datLen) = oracle.readPreimage(key, 8);
         assertEq(dat, expectedNumber);
         assertEq(datLen, expectedLen);
+    }
+
+    /// @dev Tests that if the game is not in progress, querying of `getChallengerDuration` reverts
+    function test_getChallengerDuration_gameNotInProgress_reverts() public {
+        // resolve the game
+        vm.warp(block.timestamp + gameProxy.maxClockDuration().raw());
+
+        gameProxy.resolveClaim(0, 0);
+        gameProxy.resolve();
+
+        vm.expectRevert(GameNotInProgress.selector);
+        gameProxy.getChallengerDuration(1);
     }
 
     /// @dev Static unit test asserting that resolveClaim isn't possible if there's time
@@ -2641,7 +2675,7 @@ contract FaultDispute_1v1_Actors_Test is FaultDisputeGame_Init {
             (uint256 numMovesA,) = dishonest.move();
             (uint256 numMovesB, bool success) = honest.move();
 
-            require(success, "Honest actor's moves should always be successful");
+            require(success, "FaultDispute_1v1_Actors_Test: Honest actor's moves should always be successful");
 
             // If both actors have run out of moves, we're done.
             if (numMovesA == 0 && numMovesB == 0) break;

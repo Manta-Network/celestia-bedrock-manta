@@ -13,9 +13,9 @@ import { Predeploys } from "src/libraries/Predeploys.sol";
 import { GasPayingToken } from "src/libraries/GasPayingToken.sol";
 
 // Interfaces
-import { IResourceMetering } from "src/L1/interfaces/IResourceMetering.sol";
-import { ISystemConfig } from "src/L1/interfaces/ISystemConfig.sol";
-import { IL1Block } from "src/L2/interfaces/IL1Block.sol";
+import { IResourceMetering } from "interfaces/L1/IResourceMetering.sol";
+import { ISystemConfig } from "interfaces/L1/ISystemConfig.sol";
+import { IL1Block } from "interfaces/L2/IL1Block.sol";
 
 contract SystemConfig_Init is CommonTest {
     event ConfigUpdate(uint256 indexed version, ISystemConfig.UpdateType indexed updateType, bytes data);
@@ -255,6 +255,19 @@ contract SystemConfig_Init_ResourceConfig is SystemConfig_Init {
         _initializeWithResourceConfig(config, "SystemConfig: gas limit too low");
     }
 
+    /// @dev Tests that `setResourceConfig` reverts if the gas limit is too low.
+    function test_setResourceConfig_elasticityMultiplierIs0_reverts() external {
+        IResourceMetering.ResourceConfig memory config = IResourceMetering.ResourceConfig({
+            maxResourceLimit: 20_000_000,
+            elasticityMultiplier: 0,
+            baseFeeMaxChangeDenominator: 8,
+            systemTxMaxGas: 1_000_000,
+            minimumBaseFee: 1 gwei,
+            maximumBaseFee: 2 gwei
+        });
+        _initializeWithResourceConfig(config, "SystemConfig: elasticity multiplier cannot be 0");
+    }
+
     /// @dev Tests that `setResourceConfig` reverts if the elasticity multiplier
     ///      and max resource limit are configured such that there is a loss of precision.
     function test_setResourceConfig_badPrecision_reverts() external {
@@ -372,12 +385,21 @@ contract SystemConfig_Init_CustomGasToken is SystemConfig_Init {
         // don't use multicall3's address
         vm.assume(_token != MULTICALL3_ADDRESS);
 
-        vm.assume(bytes(_name).length <= 32);
-        vm.assume(bytes(_symbol).length <= 32);
+        // Using vm.assume() would cause too many test rejections.
+        string memory name = _name;
+        if (bytes(_name).length > 32) {
+            name = _name[:32];
+        }
 
-        vm.mockCall(_token, abi.encodeWithSelector(token.decimals.selector), abi.encode(18));
-        vm.mockCall(_token, abi.encodeWithSelector(token.name.selector), abi.encode(_name));
-        vm.mockCall(_token, abi.encodeWithSelector(token.symbol.selector), abi.encode(_symbol));
+        // Using vm.assume() would cause too many test rejections.
+        string memory symbol = _symbol;
+        if (bytes(_symbol).length > 32) {
+            symbol = _symbol[:32];
+        }
+
+        vm.mockCall(_token, abi.encodeCall(token.decimals, ()), abi.encode(18));
+        vm.mockCall(_token, abi.encodeCall(token.name, ()), abi.encode(name));
+        vm.mockCall(_token, abi.encodeCall(token.symbol, ()), abi.encode(symbol));
 
         cleanStorageAndInit(_token);
 
@@ -390,13 +412,13 @@ contract SystemConfig_Init_CustomGasToken is SystemConfig_Init {
             assertEq(systemConfig.gasPayingTokenSymbol(), "ETH");
         } else {
             assertEq(addr, _token);
-            assertEq(systemConfig.gasPayingTokenName(), _name);
-            assertEq(systemConfig.gasPayingTokenSymbol(), _symbol);
+            assertEq(systemConfig.gasPayingTokenName(), name);
+            assertEq(systemConfig.gasPayingTokenSymbol(), symbol);
         }
     }
 
     /// @dev Tests that initialization sets the correct values and getters work when token address passed is 0.
-    function test_initialize_customGasToken_zeroTokenAddress_succeeds() external {
+    function test_initialize_customGasTokenWithZeroTokenAddress_succeeds() external {
         cleanStorageAndInit(address(0));
 
         (address addr, uint8 decimals) = systemConfig.gasPayingToken();
@@ -408,7 +430,7 @@ contract SystemConfig_Init_CustomGasToken is SystemConfig_Init {
     }
 
     /// @dev Tests that initialization sets the correct values and getters work when token address is Constants.ETHER
-    function test_initialize_customGasToken_etherTokenAddress_succeeds() external {
+    function test_initialize_customGasTokenWithEtherTokenAddress_succeeds() external {
         cleanStorageAndInit(Constants.ETHER);
 
         (address addr, uint8 decimals) = systemConfig.gasPayingToken();
@@ -420,30 +442,30 @@ contract SystemConfig_Init_CustomGasToken is SystemConfig_Init {
     }
 
     /// @dev Tests that initialization fails if decimals are not 18.
-    function test_initialize_customGasToken_wrongDecimals_fails() external {
-        vm.mockCall(address(token), abi.encodeWithSelector(token.decimals.selector), abi.encode(8));
+    function test_initialize_customGasTokenWrongDecimals_fails() external {
+        vm.mockCall(address(token), abi.encodeCall(token.decimals, ()), abi.encode(8));
         vm.expectRevert("SystemConfig: bad decimals of gas paying token");
 
         cleanStorageAndInit(address(token));
     }
 
     /// @dev Tests that initialization fails if name is too long.
-    function test_initialize_customGasToken_nameTooLong_fails() external {
+    function test_initialize_customGasTokenNameTooLong_fails() external {
         string memory name = new string(32);
         name = string.concat(name, "a");
 
-        vm.mockCall(address(token), abi.encodeWithSelector(token.name.selector), abi.encode(name));
+        vm.mockCall(address(token), abi.encodeCall(token.name, ()), abi.encode(name));
         vm.expectRevert("GasPayingToken: string cannot be greater than 32 bytes");
 
         cleanStorageAndInit(address(token));
     }
 
     /// @dev Tests that initialization fails if symbol is too long.
-    function test_initialize_customGasToken_symbolTooLong_fails() external {
+    function test_initialize_customGasTokenSymbolTooLong_fails() external {
         string memory symbol = new string(33);
         symbol = string.concat(symbol, "a");
 
-        vm.mockCall(address(token), abi.encodeWithSelector(token.symbol.selector), abi.encode(symbol));
+        vm.mockCall(address(token), abi.encodeCall(token.symbol, ()), abi.encode(symbol));
         vm.expectRevert("GasPayingToken: string cannot be greater than 32 bytes");
 
         cleanStorageAndInit(address(token));
@@ -542,7 +564,7 @@ contract SystemConfig_Setters_TestFail is SystemConfig_Init {
 
     /// @dev Tests that `setEIP1559Params` reverts if the elasticity is zero.
     function test_setEIP1559Params_zeroElasticity_reverts(uint32 _denominator) external {
-        vm.assume(_denominator >= 1);
+        _denominator = uint32(bound(_denominator, 1, type(uint32).max));
         vm.prank(systemConfig.owner());
         vm.expectRevert("SystemConfig: elasticity must be >= 1");
         systemConfig.setEIP1559Params({ _denominator: _denominator, _elasticity: 0 });
@@ -617,8 +639,8 @@ contract SystemConfig_Setters_Test is SystemConfig_Init {
 
     /// @dev Tests that `setEIP1559Params` updates the EIP1559 parameters successfully.
     function testFuzz_setEIP1559Params_succeeds(uint32 _denominator, uint32 _elasticity) external {
-        vm.assume(_denominator > 1);
-        vm.assume(_elasticity > 1);
+        _denominator = uint32(bound(_denominator, 2, type(uint32).max));
+        _elasticity = uint32(bound(_elasticity, 2, type(uint32).max));
 
         vm.expectEmit(address(systemConfig));
         emit ConfigUpdate(

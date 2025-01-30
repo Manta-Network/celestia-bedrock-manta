@@ -454,9 +454,15 @@
         "internalType": "uint256",
         "name": "amount",
         "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
       }
     ],
-    "name": "CrosschainBurnt",
+    "name": "CrosschainBurn",
     "type": "event"
   },
   {
@@ -473,9 +479,15 @@
         "internalType": "uint256",
         "name": "amount",
         "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
       }
     ],
-    "name": "CrosschainMinted",
+    "name": "CrosschainMint",
     "type": "event"
   },
   {

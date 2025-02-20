@@ -21,7 +21,10 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 )
 
+<<<<<<< HEAD
 var celestiaLegacyMode = os.Getenv("CELESTIA_LEGACY_MODE") == "true"
+=======
+>>>>>>> tags/op-node/v1.11.0
 var daClient *celestia.DAClient
 
 func SetDAClient(c *celestia.DAClient) error {
@@ -160,6 +163,7 @@ func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address,
 		}
 	}
 	return out, nil
+<<<<<<< HEAD
 }
 
 // 00000000000000000000000000000000000000ca1de12a6d29fe535f2d
@@ -178,4 +182,6 @@ func downloadS3Data(ctx context.Context, frameRefData []byte) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	return ioutil.ReadAll(resp.Body)
+=======
+>>>>>>> tags/op-node/v1.11.0
 }

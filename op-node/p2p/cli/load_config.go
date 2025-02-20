@@ -11,15 +11,15 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ethereum-optimism/optimism/op-node/flags"
+	"github.com/ethereum-optimism/optimism/op-node/p2p"
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
+	"github.com/ethereum/go-ethereum/log"
 	ds "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/sync"
 	leveldb "github.com/ipfs/go-ds-leveldb"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/multiformats/go-multiaddr"
-
-	"github.com/ethereum-optimism/optimism/op-node/flags"
-	"github.com/ethereum-optimism/optimism/op-node/p2p"
 
 	"github.com/urfave/cli/v2"
 
@@ -178,8 +178,9 @@ func loadDiscoveryOpts(conf *p2p.Config, ctx *cli.Context) error {
 		return fmt.Errorf("failed to open discovery db: %w", err)
 	}
 
-	records := strings.Split(ctx.String(flags.BootnodesName), ",")
+	records := ctx.StringSlice(flags.BootnodesName)
 	if len(records) == 0 {
+		log.Info("Using default bootnodes, none provided.")
 		records = p2p.DefaultBootnodes
 	}
 

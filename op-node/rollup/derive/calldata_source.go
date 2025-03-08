@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -140,16 +139,20 @@ func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address,
 						blobs, err := daClient.Client.Get(ctx2, [][]byte{data[1:]}, daClient.Namespace)
 						cancel()
 						if err != nil || len(blobs) != 1 {
+							log.Warn("celestia: unexpected length for blobs", "expected", 1, "got", len(blobs))
+							if len(blobs) == 0 {
+								log.Warn("celestia: skipping empty blobs")
+								continue
+							}
 							return nil, NewTemporaryError(fmt.Errorf("celestia: failed to resolve frame: %w, len=%q", err, len(blobs)))
 						}
 						blob = blobs[0]
 					}
-					ctx3, cancel := context.WithTimeout(context.Background(), daClient.GetTimeout)
-					commit, err := daClient.Client.Commit(ctx3, [][]byte{blob}, daClient.Namespace)
+					log.Info("celestia: creating commitment from s3 retrieved data")
+					commit, err := celestia.CreateCommitment(blob, daClient.Namespace)
 					cancel()
-					byteArray := [][]byte(commit)
-					if err != nil || !bytes.Equal(byteArray[0], data[9:]) {
-						log.Warn("celestia: invalid commitment: calldata=%x commit=%x err=%w", data, commit, err)
+					if err != nil || !bytes.Equal(commit, data[9:]) {
+						return nil, NewTemporaryError(fmt.Errorf("celestia: invalid commitment: calldata=%x commit=%x err=%w", data, commit, err))
 					}
 					out = append(out, blob)
 				default:
@@ -176,6 +179,7 @@ func downloadS3Data(ctx context.Context, frameRefData []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Warn("celestia: downloaded data from S3 cache")
 	defer resp.Body.Close()
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }

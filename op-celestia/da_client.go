@@ -8,9 +8,13 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/celestiaorg/go-square/blob"
+	"github.com/celestiaorg/go-square/inclusion"
+	"github.com/celestiaorg/go-square/namespace"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/rollkit/go-da"
 	"github.com/rollkit/go-da/proxy"
+	"github.com/tendermint/tendermint/crypto/merkle"
 )
 
 type DAClient struct {
@@ -66,4 +70,12 @@ func NewDAClient(rpc, token, namespace, fallbackMode string, gasPrice float64, s
 		S3Client:     s3Client,
 		S3Bucket:     s3bucket,
 	}, nil
+}
+
+func CreateCommitment(data da.Blob, ns da.Namespace) ([]byte, error) {
+	ins, err := namespace.From(ns)
+	if err != nil {
+		return nil, err
+	}
+	return inclusion.CreateCommitment(blob.New(ins, data, 0), merkle.HashFromByteSlices, 64)
 }

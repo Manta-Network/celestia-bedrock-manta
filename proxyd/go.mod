@@ -1,6 +1,6 @@
 module github.com/ethereum-optimism/optimism/proxyd
 
-go 1.18
+go 1.23.0
 
 require (
 	github.com/BurntSushi/toml v1.2.0
@@ -9,7 +9,6 @@ require (
 	github.com/ethereum/go-ethereum v1.12.0
 	github.com/go-redis/redis/v8 v8.11.4
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb
-	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
@@ -17,7 +16,7 @@ require (
 	github.com/prometheus/client_golang v1.14.0
 	github.com/rs/cors v1.8.2
 	github.com/stretchr/testify v1.8.1
-	golang.org/x/sync v0.1.0
+	golang.org/x/sync v0.11.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -64,10 +63,10 @@ require (
 	github.com/tklauser/numcpus v0.4.0 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20210529063254-f4c35e4016d9 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
-	golang.org/x/crypto v0.1.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
 	golang.org/x/exp v0.0.0-20230206171751-46f607a40771 // indirect
-	golang.org/x/sys v0.7.0 // indirect
-	golang.org/x/text v0.8.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 )

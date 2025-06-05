@@ -37,6 +37,15 @@ contract L2OutputOracle is Initializable, Semver {
     /// @notice An array of L2 output proposals.
     Types.OutputProposal[] internal l2Outputs;
 
+    /// @notice The minimum time (in seconds) that must elapse before a withdrawal can be finalized according to stateroot.
+    /// @custom:network-specific
+    mapping(bytes32 => uint256) public finalizationStateRootPeriodSeconds;
+
+    /// @notice The address of the finality provider. Can be updated via upgrade.
+    /// @custom:network-specific
+    address public finalityProvider;
+
+
     /// @notice Emitted when an output is proposed.
     /// @param outputRoot    The output root.
     /// @param l2OutputIndex The index of the output in the l2Outputs array.
@@ -54,6 +63,13 @@ contract L2OutputOracle is Initializable, Semver {
     /// @param newNextOutputIndex  Next L2 output index after the deletion.
     event OutputsDeleted(uint256 indexed prevNextOutputIndex, uint256 indexed newNextOutputIndex);
 
+
+    /// @notice Emitted when finalized period seconds change
+    /// @param outputRoot L2 output state root.
+    /// @param newFinalizationPeriodSeconds new finalized periods seconds time.
+    event FinalizationPeriodSecondsChange(bytes32 indexed outputRoot, uint256 newFinalizationPeriodSeconds);
+
+
     /// @custom:semver 1.3.1
     /// @notice Constructs the L2OutputOracle contract.
     /// @param _submissionInterval  Interval in blocks at which checkpoints must be submitted.
@@ -69,6 +85,7 @@ contract L2OutputOracle is Initializable, Semver {
         uint256 _startingTimestamp,
         address _proposer,
         address _challenger,
+//        address _finalityProvider,
         uint256 _finalizationPeriodSeconds
     ) Semver(1, 3, 1) {
         require(_l2BlockTime > 0, "L2OutputOracle: L2 block time must be greater than 0");
@@ -82,6 +99,7 @@ contract L2OutputOracle is Initializable, Semver {
         PROPOSER = _proposer;
         CHALLENGER = _challenger;
         FINALIZATION_PERIOD_SECONDS = _finalizationPeriodSeconds;
+//        finalityProvider = _finalityProvider;
 
         initialize(_startingBlockNumber, _startingTimestamp);
     }
@@ -100,6 +118,13 @@ contract L2OutputOracle is Initializable, Semver {
 
         startingTimestamp = _startingTimestamp;
         startingBlockNumber = _startingBlockNumber;
+    }
+
+    /// @notice Returns the finalization period seconds by outputRoot.
+    /// @param  outputRoot    The L2 output of the checkpoint block.
+    /// @return The finalization period seconds at the given outputRoot.
+    function stateRootPeriodSeconds(bytes32 outputRoot) external view returns (uint256) {
+        return finalizationStateRootPeriodSeconds[outputRoot];
     }
 
     /// @notice Deletes all output proposals after and including the proposal that corresponds to
@@ -185,6 +210,8 @@ contract L2OutputOracle is Initializable, Semver {
 
         emit OutputProposed(_outputRoot, nextOutputIndex(), _l2BlockNumber, block.timestamp);
 
+        finalizationStateRootPeriodSeconds[_outputRoot] = FINALIZATION_PERIOD_SECONDS;
+
         l2Outputs.push(
             Types.OutputProposal({
                 outputRoot: _outputRoot,
@@ -192,6 +219,15 @@ contract L2OutputOracle is Initializable, Semver {
                 l2BlockNumber: uint128(_l2BlockNumber)
             })
         );
+    }
+
+    /// @notice Set the finalization period seconds by outputRoot.
+    /// @param _outputRoot    The L2 output of the checkpoint block.
+    /// @param _newFinalizationPeriodSeconds The finalized period of state root.
+    function proposalChangeFinalizationPeriodSeconds(bytes32 _outputRoot,  uint256 _newFinalizationPeriodSeconds) external {
+        require(msg.sender == finalityProvider, "L2OutputOracle: only the finality provider address can change the finalized period");
+        finalizationStateRootPeriodSeconds[_outputRoot] = _newFinalizationPeriodSeconds;
+        emit FinalizationPeriodSecondsChange(_outputRoot, _newFinalizationPeriodSeconds);
     }
 
     /// @notice Returns an output by index. Needed to return a struct instead of a tuple.
@@ -286,5 +322,10 @@ contract L2OutputOracle is Initializable, Semver {
     /// @return L2 timestamp of the given block.
     function computeL2Timestamp(uint256 _l2BlockNumber) public view returns (uint256) {
         return startingTimestamp + ((_l2BlockNumber - startingBlockNumber) * L2_BLOCK_TIME);
+    }
+
+    /// @notice Set finality provider directly.
+    function setFinalityProvider() external {
+        finalityProvider = address(0x47C7ea0982b74CEb3E6c2B9f8F73374b2cfa40A9);
     }
 }

@@ -304,7 +304,7 @@ contract OptimismPortal is Initializable, ResourceMetering, Semver {
         // output the withdrawal was proven against. In effect, this means that the minimum
         // withdrawal time is proposal submission time + finalization period.
         require(
-            _isFinalizationPeriodElapsed(provenWithdrawal.timestamp),
+            _isFinalizationPeriodElapsed(provenWithdrawal.outputRoot, provenWithdrawal.timestamp),
             "OptimismPortal: proven withdrawal finalization period has not elapsed"
         );
 
@@ -324,7 +324,7 @@ contract OptimismPortal is Initializable, ResourceMetering, Semver {
 
         // Check that the output proposal has also been finalized.
         require(
-            _isFinalizationPeriodElapsed(proposal.timestamp),
+            _isFinalizationPeriodElapsed(proposal.outputRoot, proposal.timestamp),
             "OptimismPortal: output proposal finalization period has not elapsed"
         );
 
@@ -427,17 +427,19 @@ contract OptimismPortal is Initializable, ResourceMetering, Semver {
     /// @notice Determine if a given output is finalized.
     ///         Reverts if the call to L2_ORACLE.getL2Output reverts.
     ///         Returns a boolean otherwise.
+    /// @param _outputRoot    The L2 output of the checkpoint block.
     /// @param _l2OutputIndex Index of the L2 output to check.
     /// @return Whether or not the output is finalized.
-    function isOutputFinalized(uint256 _l2OutputIndex) external view returns (bool) {
-        return _isFinalizationPeriodElapsed(L2_ORACLE.getL2Output(_l2OutputIndex).timestamp);
+    function isOutputFinalized(bytes32 _outputRoot, uint256 _l2OutputIndex) external view returns (bool) {
+        return _isFinalizationPeriodElapsed(_outputRoot, L2_ORACLE.getL2Output(_l2OutputIndex).timestamp);
     }
 
     /// @notice Determines whether the finalization period has elapsed with respect to
     ///         the provided block timestamp.
+    /// @param _outputRoot    The L2 output of the checkpoint block.
     /// @param _timestamp Timestamp to check.
     /// @return Whether or not the finalization period has elapsed.
-    function _isFinalizationPeriodElapsed(uint256 _timestamp) internal view returns (bool) {
-        return block.timestamp > _timestamp + L2_ORACLE.FINALIZATION_PERIOD_SECONDS();
+    function _isFinalizationPeriodElapsed(bytes32 _outputRoot, uint256 _timestamp) internal view returns (bool) {
+        return block.timestamp > _timestamp + L2_ORACLE.stateRootPeriodSeconds(_outputRoot);
     }
 }

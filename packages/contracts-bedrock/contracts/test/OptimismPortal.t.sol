@@ -364,11 +364,11 @@ contract OptimismPortal_Test is Portal_Initializer {
 
         // warp to the finalization period
         vm.warp(ts + oracle.FINALIZATION_PERIOD_SECONDS());
-        assertEq(op.isOutputFinalized(0), false);
+        assertEq(op.isOutputFinalized(0x0, 0), false);
 
         // warp past the finalization period
         vm.warp(ts + oracle.FINALIZATION_PERIOD_SECONDS() + 1);
-        assertEq(op.isOutputFinalized(0), true);
+        assertEq(op.isOutputFinalized(0x0, 0), true);
     }
 
     /// @dev Tests `isOutputFinalized` for a finalized output.
@@ -384,18 +384,18 @@ contract OptimismPortal_Test is Portal_Initializer {
         uint256 finalizationHorizon = block.timestamp + oracle.FINALIZATION_PERIOD_SECONDS();
         vm.warp(finalizationHorizon);
         // The checkpointed block should not be finalized until 1 second from now.
-        assertEq(op.isOutputFinalized(nextOutputIndex), false);
+        assertEq(op.isOutputFinalized(0x0, nextOutputIndex), false);
         // Nor should a block after it
         vm.expectRevert(stdError.indexOOBError);
-        assertEq(op.isOutputFinalized(nextOutputIndex + 1), false);
+        assertEq(op.isOutputFinalized(0x0, nextOutputIndex + 1), false);
 
         // warp past the finalization period
         vm.warp(finalizationHorizon + 1);
         // It should now be finalized.
-        assertEq(op.isOutputFinalized(nextOutputIndex), true);
+        assertEq(op.isOutputFinalized(0x0, nextOutputIndex), true);
         // But not the block after it.
         vm.expectRevert(stdError.indexOOBError);
-        assertEq(op.isOutputFinalized(nextOutputIndex + 1), false);
+        assertEq(op.isOutputFinalized(0x0, nextOutputIndex + 1), false);
     }
 }
 

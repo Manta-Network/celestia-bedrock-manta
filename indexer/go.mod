@@ -8,7 +8,7 @@ require (
 	github.com/BurntSushi/toml v1.3.0
 	github.com/ethereum-optimism/optimism v1.0.9
 	github.com/ethereum/go-ethereum v1.11.6
-	github.com/go-chi/chi/v5 v5.0.8
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/jackc/pgtype v1.14.0

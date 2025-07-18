@@ -1,6 +1,6 @@
 module github.com/ethereum-optimism/optimism/op-exporter
 
-go 1.18
+go 1.23.0
 
 require (
 	github.com/ethereum/go-ethereum v1.10.17
@@ -21,7 +21,7 @@ require (
 	github.com/go-logr/logr v0.4.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
-	github.com/google/go-cmp v0.5.8 // indirect
+	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.1.1-0.20200604201612-c04b05f3adfa // indirect
 	github.com/googleapis/gnostic v0.4.1 // indirect
 	github.com/json-iterator/go v1.1.11 // indirect
@@ -33,12 +33,11 @@ require (
 	github.com/prometheus/common v0.30.0 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
 	golang.org/x/net v0.7.0 // indirect
-	golang.org/x/oauth2 v0.0.0-20210514164344-f6687ab2804c // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/term v0.5.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
 	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65 // indirect
-	google.golang.org/appengine v1.6.6 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

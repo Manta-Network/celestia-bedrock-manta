@@ -8,31 +8,29 @@ contract UpgradeScript is Script {
 
     function run() external {
         uint256 ownerPrivateKey = vm.envUint("PRIVATE_KEY");
-        ProxyAdmin proxyAdmin = ProxyAdmin(vm.envAddress("PROXY_ADMIN_ADDRESS"));
-        address optimismPortalProxy = vm.envAddress("OPTIMISM_PORTAL_PROXY");
-        OptimismPortal PortalProxy = OptimismPortal(payable(optimismPortalProxy));
+
+        ProxyAdmin proxyAdmin = ProxyAdmin(0xa2DCa85BB892De55D8B262d1806114733106e8D1);
+        address portalProxy = 0x9168765EE952de7C6f8fC6FaD5Ec209B960b7622;
+
+        // implementation
+        address portalImplementation = 0x4fEee20712abF5724C2BC0476BD87CBf1F1eE388;
         vm.startBroadcast(ownerPrivateKey);
 
-        console.log("===========");
-        console.log(PortalProxy.GUARDIAN());
-        console.log(PortalProxy.paused());
-        console.log("===========");
+        bytes memory upgradeCalldata = abi.encodeWithSelector(
+            ProxyAdmin.upgrade.selector,
+            payable(portalProxy),
+            portalImplementation
+        );
 
-        OptimismPortal portal = new OptimismPortal({
-            _l2Oracle: PortalProxy.L2_ORACLE(),
-            _guardian: PortalProxy.GUARDIAN(),
-            _paused: PortalProxy.paused(),
-            _config: PortalProxy.SYSTEM_CONFIG()
-        });
 
-        console.log("address===========");
-        console.log(address(portal));
-        console.log("address===========");
+        console.log("upgradeCalldata===========");
+        console.logBytes(upgradeCalldata);
+        console.log("upgradeCalldata===========");
 
-        proxyAdmin.upgrade({
-            _proxy: payable(optimismPortalProxy),
-            _implementation: address(portal)
-        });
+        // proxyAdmin.upgrade({
+        //     _proxy: payable(optimismPortalProxy),
+        //     _implementation: address(portal)
+        // });
 
         vm.stopBroadcast();
 

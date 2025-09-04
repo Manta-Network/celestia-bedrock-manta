@@ -8,39 +8,29 @@ contract UpgradeScript is Script {
 
     function run() external {
         uint256 ownerPrivateKey = vm.envUint("PRIVATE_KEY");
-        ProxyAdmin proxyAdmin = ProxyAdmin(vm.envAddress("PROXY_ADMIN_ADDRESS"));
-        address l2OutputOracleProxy = vm.envAddress("L2_OUTPUT_ORACLE_PROXY");
-        L2OutputOracle OracleProxy = L2OutputOracle(l2OutputOracleProxy);
+
+        ProxyAdmin proxyAdmin = ProxyAdmin(0xa2DCa85BB892De55D8B262d1806114733106e8D1);
+        address oracleProxy = 0x30c789674ad3B458886BBC9abf42EEe19EA05C1D;
+
+        // implementation
+        address oracleImplementation = 0x0e874B9acD8d284B9bF6f6c6CC95BCE6F66E5441;
         vm.startBroadcast(ownerPrivateKey);
 
-        console.log("===========");
-        console.log(OracleProxy.SUBMISSION_INTERVAL());
-        console.log(OracleProxy.L2_BLOCK_TIME());
-        console.log(OracleProxy.startingBlockNumber());
-        console.log(OracleProxy.startingTimestamp());
-        console.log(OracleProxy.PROPOSER());
-        console.log(OracleProxy.CHALLENGER());
-        console.log(OracleProxy.FINALIZATION_PERIOD_SECONDS());
-        console.log("===========");
 
-        L2OutputOracle oracle1 = new L2OutputOracle({
-            _submissionInterval: OracleProxy.SUBMISSION_INTERVAL(),
-            _l2BlockTime: OracleProxy.L2_BLOCK_TIME(),
-            _startingBlockNumber: OracleProxy.startingBlockNumber(),
-            _startingTimestamp: OracleProxy.startingTimestamp(),
-            _proposer: OracleProxy.PROPOSER(),
-            _challenger: OracleProxy.CHALLENGER(),
-            _finalizationPeriodSeconds: OracleProxy.FINALIZATION_PERIOD_SECONDS()
-        });
+        bytes memory upgradeCalldata = abi.encodeWithSelector(
+            ProxyAdmin.upgrade.selector,
+            payable(oracleProxy),
+            oracleImplementation
+        );
 
-        console.log("address===========");
-        console.log(address(oracle1));
-        console.log("address===========");
+        console.log("upgradeCalldata===========");
+        console.logBytes(upgradeCalldata);
+        console.log("upgradeCalldata===========");
 
-        proxyAdmin.upgrade({
-            _proxy: payable(l2OutputOracleProxy),
-            _implementation: address(oracle1)
-        });
+        // proxyAdmin.upgrade({
+        //     _proxy: payable(l2OutputOracleProxy),
+        //     _implementation: address(oracle1)
+        // });
 
         vm.stopBroadcast();
 
